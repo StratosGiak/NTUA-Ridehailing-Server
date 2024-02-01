@@ -2,3 +2,4 @@
 .env.production
 *.log
 public
+node_modules/@tensorflow/tfjs-node/lib/napi-v8/tensorflow.dll
