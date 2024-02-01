@@ -1,10 +1,21 @@
 import express from "express";
 import multer from "multer";
-import fs from "fs";
+import fs from "fs/promises";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
 import { loggerMain, loggerTraffic } from "./logger/logger.js";
 import dotenv from "dotenv";
+import { load as loadMobileNet } from "@tensorflow-models/mobilenet";
+import * as tf from "@tensorflow/tfjs-node";
+
+const model = await loadMobileNet();
+
+async function classifyImageFile(model, path) {
+  const imageBuffer = await fs.readFile(path);
+  const tensor = tf.node.decodeImage(imageBuffer);
+  const predictions = await model.classify(tensor);
+  console.log(predictions);
+}
 
 if (process.env.NODE_ENV === "production") {
   dotenv.config({ path: "./.env.production" });
@@ -16,7 +27,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 var app = express();
-const maxImageSize = 5e6;
+const maxImageSize = 1e6;
 
 app.use(express.static("public"));
 app.listen(process.env.MEDIA_PORT, function () {
@@ -28,35 +39,51 @@ app.listen(process.env.MEDIA_PORT, function () {
 });
 
 const uploadCar = multer({
-  dest: __dirname + "/images/cars",
+  dest: __dirname + "public/images/cars",
   limits: { fileSize: maxImageSize },
+  fileFilter: (req, file, callback) => {
+    if (file.mimetype == "image/jpeg") {
+      return callback(null, true);
+    }
+    return callback(new Error("File type is not image"), false);
+  },
 });
 const uploadUser = multer({
-  dest: __dirname + "/images/users",
+  dest: __dirname + "public/images/users",
   limits: { fileSize: maxImageSize },
+  fileFilter: (req, file, callback) => {
+    if (file.mimetype == "image/jpeg") {
+      return callback(null, true);
+    }
+    return callback(new Error("File type is not image"), false);
+  },
 });
 
-app.post("/images/cars", uploadCar.single("file"), (req, res) => {
-  var file = __dirname + "/public/images/cars/" + req.file.filename;
-  fs.rename(req.file.path, file, (err) => {
-    if (err) {
-      loggerMain.error(err);
-      res.status(500).send();
-    } else {
-      res.send(req.file.filename);
-    }
+app.post("/images/cars", (req, res) => {
+  uploadUser.single("file")(req, res, (err) => {
+    var file = __dirname + "/public/images/cars/" + req.file.filename;
+    fs.rename(req.file.path, file, (err) => {
+      if (err) {
+        loggerMain.error(err);
+        res.status(500).send();
+      } else {
+        res.send(req.file.filename);
+      }
+    });
   });
 });
 
-app.post("/images/users", uploadUser.single("file"), (req, res) => {
-  var file = __dirname + "/public/images/users/" + req.file.filename;
-  fs.rename(req.file.path, file, (err) => {
-    if (err) {
-      loggerMain.error(err);
-      res.status(500).send();
-    } else {
-      res.send(req.file.filename);
-    }
+app.post("/images/users", (req, res) => {
+  uploadUser.single("file")(req, res, (err) => {
+    var file = __dirname + "/public/images/users/" + req.file.filename;
+    fs.rename(req.file.path, file, (err) => {
+      if (err) {
+        loggerMain.error(err);
+        res.status(500).send();
+      } else {
+        res.send(req.file.filename);
+      }
+    });
   });
 });
 

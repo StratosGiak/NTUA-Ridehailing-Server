@@ -1,5 +1,4 @@
 import { createLogger, transports, format } from "winston";
-import winston from "winston/lib/winston/config";
 
 const customFormat = format.printf(({ level, message, timestamp }) => {
   return `[${timestamp}] ${level}: ${message}`;
