@@ -5,17 +5,6 @@ import { fileURLToPath } from "url";
 import { dirname } from "path";
 import { loggerMain, loggerTraffic } from "./logger/logger.js";
 import dotenv from "dotenv";
-import { load as loadMobileNet } from "@tensorflow-models/mobilenet";
-import * as tf from "@tensorflow/tfjs-node";
-
-const model = await loadMobileNet();
-
-async function classifyImageFile(model, path) {
-  const imageBuffer = await fs.readFile(path);
-  const tensor = tf.node.decodeImage(imageBuffer);
-  const predictions = await model.classify(tensor);
-  console.log(predictions);
-}
 
 if (process.env.NODE_ENV === "production") {
   dotenv.config({ path: "./.env.production" });
