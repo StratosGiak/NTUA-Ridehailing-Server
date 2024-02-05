@@ -1,7 +1,8 @@
 import fs from "fs/promises";
 import { node as tfnode } from "@tensorflow/tfjs-node";
 
-const model = await tfnode.loadSavedModel("tflite_models/nsfw_detection");
+const modelNSFW = await tfnode.loadSavedModel("tflite_models/nsfw_detection");
+const modelHumanCar = await tfnode.loadSavedModel("tflite_models/mobilenetv3");
 
 async function classifyImageFile(model, softmax, path) {
   const imageBuffer = await fs.readFile(path);
@@ -15,6 +16,10 @@ async function classifyImageFile(model, softmax, path) {
   const { values, indices } = predictions.topk(5);
   values.print();
   indices.print();
+  tensor.dispose();
+  return values.data();
 }
 
-classifyImageFile(model, false, "public/images/users/rat.jpg");
+classifyImageFile(modelHumanCar, true, "public/images/users/badcat.jpg");
+
+//DETECT NSFW * (USER | CAR) ALL IN ONE PASS

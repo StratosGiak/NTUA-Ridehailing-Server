@@ -28,55 +28,59 @@ app.listen(process.env.MEDIA_PORT, function () {
 });
 
 const uploadCar = multer({
-  dest: __dirname + "public/images/cars",
+  dest: __dirname + "\\public\\images\\cars",
   limits: { fileSize: maxImageSize },
   fileFilter: (req, file, callback) => {
-    if (file.mimetype == "image/jpeg") {
+    if (file.mimetype == "image/jpeg" || file.mimetype == "image/png") {
       return callback(null, true);
     }
-    return callback(new Error("File type is not image"), false);
+    return callback(
+      new Error(`File type is not image: ${file.mimetype}`),
+      false
+    );
   },
 });
 const uploadUser = multer({
-  dest: __dirname + "public/images/users",
+  dest: __dirname + "\\public\\images\\users",
   limits: { fileSize: maxImageSize },
   fileFilter: (req, file, callback) => {
-    if (file.mimetype == "image/jpeg") {
+    if (file.mimetype == "image/jpeg" || file.mimetype == "image/png") {
       return callback(null, true);
     }
-    return callback(new Error("File type is not image"), false);
+    return callback(
+      new Error(`File type is not image: ${file.mimetype}`),
+      false
+    );
   },
 });
 
-app.post("/images/cars", (req, res) => {
-  uploadUser.single("file")(req, res, (err) => {
-    var file = __dirname + "/public/images/cars/" + req.file.filename;
-    fs.rename(req.file.path, file, (err) => {
-      if (err) {
-        loggerMain.error(err);
-        res.status(500).send();
-      } else {
-        res.send(req.file.filename);
-      }
-    });
+app.get("/media/*", (req, res) => {
+  res.sendFile(__dirname + "\\public" + req.url.replace("/media", ""));
+});
+
+app.post("/media/images/cars", (req, res) => {
+  uploadCar.single("file")(req, res, (err) => {
+    if (err) {
+      loggerMain.error(err);
+      res.status(500).send();
+    } else {
+      res.send(req.file.filename);
+    }
   });
 });
 
-app.post("/images/users", (req, res) => {
+app.post("/media/images/users", (req, res) => {
   uploadUser.single("file")(req, res, (err) => {
-    var file = __dirname + "/public/images/users/" + req.file.filename;
-    fs.rename(req.file.path, file, (err) => {
-      if (err) {
-        loggerMain.error(err);
-        res.status(500).send();
-      } else {
-        res.send(req.file.filename);
-      }
-    });
+    if (err) {
+      loggerMain.error(err);
+      res.status(500).send();
+    } else {
+      res.send(req.file.filename);
+    }
   });
 });
 
-app.delete("/images/users/:filename", (req, res) => {
+app.delete("/media/images/users/:filename", (req, res) => {
   if (
     (req.socket.localAddress == "127.0.0.1" ||
       req.socket.localAddress == "::ffff:127.0.0.1" ||
@@ -84,7 +88,7 @@ app.delete("/images/users/:filename", (req, res) => {
     req.params.filename
   ) {
     fs.rm(
-      __dirname + `/public/images/users/${req.params.filename}`,
+      __dirname + `\\public\\images\\users\\${req.params.filename}`,
       function (err) {
         if (err) {
           res.sendStatus(404);
@@ -99,7 +103,7 @@ app.delete("/images/users/:filename", (req, res) => {
   }
 });
 
-app.delete("/images/cars/:filename", (req, res) => {
+app.delete("/media/images/cars/:filename", (req, res) => {
   if (
     (req.socket.localAddress == "127.0.0.1" ||
       req.socket.localAddress == "::ffff:127.0.0.1" ||
@@ -107,7 +111,7 @@ app.delete("/images/cars/:filename", (req, res) => {
     req.params.filename
   ) {
     fs.rm(
-      __dirname + `/public/images/cars/${req.params.filename}`,
+      __dirname + `\\public\\images\\cars\\${req.params.filename}`,
       function (err) {
         if (err) {
           res.sendStatus(404);
