@@ -54,11 +54,7 @@ const uploadUser = multer({
   },
 });
 
-app.get("/media/*", (req, res) => {
-  res.sendFile(__dirname + "\\public" + req.url.replace("/media", ""));
-});
-
-app.post("/media/images/cars", (req, res) => {
+app.post("/images/cars", (req, res) => {
   uploadCar.single("file")(req, res, (err) => {
     if (err) {
       loggerMain.error(err);
@@ -69,7 +65,7 @@ app.post("/media/images/cars", (req, res) => {
   });
 });
 
-app.post("/media/images/users", (req, res) => {
+app.post("/images/users", (req, res) => {
   uploadUser.single("file")(req, res, (err) => {
     if (err) {
       loggerMain.error(err);
@@ -80,7 +76,7 @@ app.post("/media/images/users", (req, res) => {
   });
 });
 
-app.delete("/media/images/users/:filename", (req, res) => {
+app.delete("/images/users/:filename", (req, res) => {
   if (
     (req.socket.localAddress == "127.0.0.1" ||
       req.socket.localAddress == "::ffff:127.0.0.1" ||
@@ -103,7 +99,7 @@ app.delete("/media/images/users/:filename", (req, res) => {
   }
 });
 
-app.delete("/media/images/cars/:filename", (req, res) => {
+app.delete("/images/cars/:filename", (req, res) => {
   if (
     (req.socket.localAddress == "127.0.0.1" ||
       req.socket.localAddress == "::ffff:127.0.0.1" ||

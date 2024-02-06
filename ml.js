@@ -20,6 +20,4 @@ async function classifyImageFile(model, softmax, path) {
   return values.data();
 }
 
-classifyImageFile(modelHumanCar, true, "public/images/users/badcat.jpg");
-
-//DETECT NSFW * (USER | CAR) ALL IN ONE PASS
+classifyImageFile(modelHumanCar, true, "public/images/users/panda.jpg");
