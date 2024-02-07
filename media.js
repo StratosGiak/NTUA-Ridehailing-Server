@@ -28,7 +28,7 @@ app.listen(process.env.MEDIA_PORT, function () {
 });
 
 const uploadCar = multer({
-  dest: __dirname + "\\public\\images\\cars",
+  dest: __dirname + "/public/images/cars",
   limits: { fileSize: maxImageSize },
   fileFilter: (req, file, callback) => {
     if (file.mimetype == "image/jpeg" || file.mimetype == "image/png") {
@@ -41,7 +41,7 @@ const uploadCar = multer({
   },
 });
 const uploadUser = multer({
-  dest: __dirname + "\\public\\images\\users",
+  dest: __dirname + "/public/images/users",
   limits: { fileSize: maxImageSize },
   fileFilter: (req, file, callback) => {
     if (file.mimetype == "image/jpeg" || file.mimetype == "image/png") {
@@ -84,7 +84,7 @@ app.delete("/images/users/:filename", (req, res) => {
     req.params.filename
   ) {
     fs.rm(
-      __dirname + `\\public\\images\\users\\${req.params.filename}`,
+      __dirname + `/public/images/users/${req.params.filename}`,
       function (err) {
         if (err) {
           res.sendStatus(404);
@@ -107,7 +107,7 @@ app.delete("/images/cars/:filename", (req, res) => {
     req.params.filename
   ) {
     fs.rm(
-      __dirname + `\\public\\images\\cars\\${req.params.filename}`,
+      __dirname + `/public/images/cars/${req.params.filename}`,
       function (err) {
         if (err) {
           res.sendStatus(404);
