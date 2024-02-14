@@ -90,7 +90,7 @@ wss.on("connection", (ws, req) => {
     if (driverMap[wsToID[wsIP]]) {
       driverMap[wsToID[wsIP]].passengers.forEach((passenger) => {
         if (sockets[passenger.id]) {
-          sockets[passenger.id].send(msgToJSON(typeOfMessage.getDriver, null));
+          sockets[passenger.id].send(msgToJSON(typeOfMessage.getDriver, {}));
         }
         if (passengerMap[passenger.id]) {
           delete passengerMap[passenger.id].driver_id;
@@ -160,7 +160,6 @@ wss.on("connection", (ws, req) => {
           result = await createUser(id, name, token);
           usersMap[id] = result;
         }
-        result.mapUrl = process.env.MAP_URL;
         ws.send(msgToJSON(typeOfMessage.login, result));
         wsToID[wsIP] = id;
         sockets[id] = ws;
@@ -316,7 +315,7 @@ wss.on("connection", (ws, req) => {
           driverMap[passengerMap[wsToID[wsIP]].driver_id].passengers.length >=
             driverMap[passengerMap[wsToID[wsIP]].driver_id].car.seats
         ) {
-          ws.send(msgToJSON(typeOfMessage.pingDriver, null));
+          ws.send(msgToJSON(typeOfMessage.pingDriver, {}));
           delete passengerMap[wsToID[wsIP]].driver_id;
         } else {
           driverMap[passengerMap[wsToID[wsIP]].driver_id].passengers.push(
@@ -337,9 +336,7 @@ wss.on("connection", (ws, req) => {
         if (!driverMap[wsToID[wsIP]]) break;
         driverMap[wsToID[wsIP]].passengers.forEach((passenger) => {
           if (sockets[passenger.id]) {
-            sockets[passenger.id].send(
-              msgToJSON(typeOfMessage.getDriver, null)
-            );
+            sockets[passenger.id].send(msgToJSON(typeOfMessage.getDriver, {}));
           }
           if (passengerMap[passenger.id]) {
             delete passengerMap[passenger.id].driver_id;
@@ -582,7 +579,7 @@ wss.on("connection", (ws, req) => {
           driverMap[wsToID[wsIP]].passengers.forEach((passenger) => {
             if (sockets[passenger.id]) {
               sockets[passenger.id].send(
-                msgToJSON(typeOfMessage.getDriver, null)
+                msgToJSON(typeOfMessage.getDriver, {})
               );
             }
             if (passengerMap[passenger.id]) {

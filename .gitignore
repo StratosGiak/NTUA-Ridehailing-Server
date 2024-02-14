@@ -3,4 +3,4 @@
 *.log
 public
 test.js
-node_modules/@tensorflow/tfjs-node/lib/napi-v8/tensorflow.dll
+node_modules/

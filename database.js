@@ -44,7 +44,6 @@ export async function getUser(user_id) {
   ]);
   user[0].cars = cars.reduce(function (map, car) {
     map[car.car_id] = car;
-    delete car.user_id;
     delete car.car_id;
     return map;
   }, {});
