@@ -1,6 +1,6 @@
 .env.development
 .env.production
-*.log
+*.log*
 public
 test.js
 node_modules/

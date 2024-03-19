@@ -1,9 +1,7 @@
 import express from "express";
 import multer from "multer";
 import fs from "fs/promises";
-import { fileURLToPath } from "url";
-import { dirname } from "path";
-import { loggerMain, loggerTraffic } from "./logger/logger.js";
+import { loggerMedia } from "./log/logger.js";
 import dotenv from "dotenv";
 
 if (process.env.NODE_ENV === "production") {
@@ -12,23 +10,21 @@ if (process.env.NODE_ENV === "production") {
   dotenv.config({ path: "./.env.development" });
 }
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
 var app = express();
-const maxImageSize = 1e6;
 
 app.use(express.static("public"));
-app.listen(process.env.MEDIA_PORT, function () {
-  loggerMain.info(
+app.listen(process.env.MEDIA_PORT, () => {
+  loggerMedia.info(
     `Started media server on port ${process.env.MEDIA_PORT} (${
       process.env.NODE_ENV === "production" ? "production" : "development"
     })`
   );
 });
 
+const maxImageSize = process.env.MAX_IMAGE_SIZE;
+
 const uploadCar = multer({
-  dest: __dirname + "/public/images/cars",
+  dest: "./public/images/cars",
   limits: { fileSize: maxImageSize },
   fileFilter: (req, file, callback) => {
     if (file.mimetype == "image/jpeg" || file.mimetype == "image/png") {
@@ -41,7 +37,7 @@ const uploadCar = multer({
   },
 });
 const uploadUser = multer({
-  dest: __dirname + "/public/images/users",
+  dest: "./public/images/users",
   limits: { fileSize: maxImageSize },
   fileFilter: (req, file, callback) => {
     if (file.mimetype == "image/jpeg" || file.mimetype == "image/png") {
@@ -57,7 +53,7 @@ const uploadUser = multer({
 app.post("/images/cars", (req, res) => {
   uploadCar.single("file")(req, res, (err) => {
     if (err) {
-      loggerMain.error(err);
+      loggerMedia.error(err);
       res.status(500).send();
     } else {
       res.send(req.file.filename);
@@ -68,7 +64,7 @@ app.post("/images/cars", (req, res) => {
 app.post("/images/users", (req, res) => {
   uploadUser.single("file")(req, res, (err) => {
     if (err) {
-      loggerMain.error(err);
+      loggerMedia.error(err);
       res.status(500).send();
     } else {
       res.send(req.file.filename);
@@ -83,19 +79,20 @@ app.delete("/images/users/:filename", (req, res) => {
       req.socket.localAddress == "::1") &&
     req.params.filename
   ) {
-    fs.rm(
-      __dirname + `/public/images/users/${req.params.filename}`,
-      function (err) {
-        if (err) {
-          res.sendStatus(404);
-          return loggerMain.warn(
-            `Failed to delete file at /images/users/${req.params.filename}`
-          );
-        }
-        loggerMain.info(`Deleted file at /images/users/${req.params.filename}`);
+    console.log(`./public/images/users/${req.params.filename}`);
+    fs.rm(`./public/images/users/${req.params.filename}`)
+      .then(() => {
+        loggerMedia.info(
+          `Deleted file at /images/users/${req.params.filename}`
+        );
         res.sendStatus(204);
-      }
-    );
+      })
+      .catch((err) => {
+        loggerMedia.warn(
+          `Failed to delete file at /images/users/${req.params.filename}.\n${err}`
+        );
+        res.sendStatus(404);
+      });
   }
 });
 
@@ -106,18 +103,17 @@ app.delete("/images/cars/:filename", (req, res) => {
       req.socket.localAddress == "::1") &&
     req.params.filename
   ) {
-    fs.rm(
-      __dirname + `/public/images/cars/${req.params.filename}`,
-      function (err) {
-        if (err) {
-          res.sendStatus(404);
-          return loggerMain.warn(
-            `Failed to delete file at /images/cars/${req.params.filename}`
-          );
-        }
-        loggerMain.info(`Deleted file at /images/cars/${req.params.filename}`);
+    console.log(`./public/images/cars/${req.params.filename}`);
+    fs.rm(`./public/images/cars/${req.params.filename}`)
+      .then((_) => {
+        loggerMedia.info(`Deleted file at /images/cars/${req.params.filename}`);
         res.sendStatus(204);
-      }
-    );
+      })
+      .catch((err) => {
+        loggerMedia.warn(
+          `Failed to delete file at /images/cars/${req.params.filename}.\n${err}`
+        );
+        res.sendStatus(404);
+      });
   }
 });
