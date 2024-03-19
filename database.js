@@ -41,7 +41,7 @@ export async function getUser(user_id) {
   const [cars] = await pool.execute(`SELECT * FROM cars WHERE user_id = ?`, [
     user_id,
   ]);
-  user[0].cars = cars.reduce(function (map, car) {
+  user[0].cars = cars.reduce((map, car) => {
     delete car.user_id;
     map[car.car_id] = car;
     return map;
@@ -49,11 +49,10 @@ export async function getUser(user_id) {
   return user[0];
 }
 
-export async function getUserCar(car_id) {
+export async function getCar(car_id) {
   const [car] = await pool.execute(`SELECT * FROM cars WHERE car_id = ?`, [
     car_id,
   ]);
-  delete car[0].user_id;
   return car[0];
 }
 
@@ -65,12 +64,12 @@ export async function createUser(user_id, name) {
   return getUser(user_id);
 }
 
-export async function createUserCar(user_id, car) {
+export async function createCar(user_id, car) {
   const [result, fields] = await pool.execute(
     `INSERT INTO cars (user_id, model, seats, license, picture, color) VALUES (?, ?, ?, ?, ?, ?)`,
     [user_id, car.model, car.seats, car.license, car.picture, car.color]
   );
-  return getUserCar(result.insertId);
+  return getCar(result.insertId);
 }
 
 export async function updateUserPicture(user_id, picture) {
@@ -101,7 +100,7 @@ export async function updateUserCar(user_id, car) {
       car.car_id,
     ]
   );
-  return getUserCar(car.car_id);
+  return getCar(car.car_id);
 }
 
 export async function removeUserCar(user_id, car_id) {
@@ -112,7 +111,6 @@ export async function removeUserCar(user_id, car_id) {
 }
 
 export async function removeUser(user_id) {
-  const [result, fields] = await pool.execute(`DELETE FROM users WHERE id = ?`, [
-    user_id,
-  ]);
+  await pool.execute(`DELETE FROM users WHERE id = ?`, [user_id]);
+  await pool.execute(`DELETE FROM cars WHERE user_id = ?`, [user_id]);
 }

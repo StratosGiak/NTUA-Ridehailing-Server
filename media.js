@@ -79,7 +79,6 @@ app.delete("/images/users/:filename", (req, res) => {
       req.socket.localAddress == "::1") &&
     req.params.filename
   ) {
-    console.log(`./public/images/users/${req.params.filename}`);
     fs.rm(`./public/images/users/${req.params.filename}`)
       .then(() => {
         loggerMedia.info(
@@ -103,7 +102,6 @@ app.delete("/images/cars/:filename", (req, res) => {
       req.socket.localAddress == "::1") &&
     req.params.filename
   ) {
-    console.log(`./public/images/cars/${req.params.filename}`);
     fs.rm(`./public/images/cars/${req.params.filename}`)
       .then((_) => {
         loggerMedia.info(`Deleted file at /images/cars/${req.params.filename}`);

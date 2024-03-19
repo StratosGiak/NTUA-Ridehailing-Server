@@ -1,0 +1,24 @@
+#!/bin/bash
+
+if [ $# -ne 1 ]; then
+  echo "Usage $0 [-development | -production]"
+  exit 1
+fi
+
+if [ "$1" == "-production" ]; then
+  export NODE_ENV="production"
+elif [ "$1" == "-development" ]; then
+  export NODE_ENV="development"
+else
+  exit 1
+fi
+
+echo "Starting server in $1 mode..."
+
+parallel --lb ::: 'sudo node api.js' 'sudo node media.js' & pid=$!
+
+wait $pid
+
+echo
+echo "Server stopped"
+
