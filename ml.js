@@ -1,23 +1,26 @@
 import fs from "fs/promises";
-import { node as tfnode } from "@tensorflow/tfjs-node";
+import {
+  node as tfnode,
+  tidy as tftidy,
+  dispose as tfdispose,
+} from "@tensorflow/tfjs-node";
 
 const modelNSFW = await tfnode.loadSavedModel("tflite_models/nsfw_detection");
-
 async function classifyImageFile(model, softmax, path) {
   const imageBuffer = await fs.readFile(path);
-  const tensor = tfnode
-    .decodeImage(imageBuffer)
-    .resizeBilinear([224, 224])
-    .div(255)
-    .expandDims(0);
-  const output = model.predict(tensor).unstack()[0];
-  const predictions = softmax ? output.softmax() : output;
-  // const { values, indices } = predictions.topk(5);
-  // values.print();
-  // indices.print();
-  //predictions.print();
-  tensor.dispose();
-  return predictions.data();
+  const predictions = tftidy(() => {
+    const tensor = tfnode
+      .decodeImage(imageBuffer)
+      .resizeBilinear([224, 224])
+      .div(255)
+      .expandDims(0);
+    const output = model.predict(tensor).unstack()[0];
+    const predictions = softmax ? output.softmax() : output;
+    return predictions;
+  });
+  const predictionArray = predictions.data();
+  tfdispose(predictions);
+  return predictionArray;
 }
 
 export async function isNSFW(path) {
