@@ -63,16 +63,15 @@ loggerMain.info(
 
 var driverMap = {};
 var passengerMap = {};
-var uuidToID = {};
 var sockets = {};
 
 function msgToJSON(type, data) {
   return JSON.stringify({ type: type, data: data });
 }
 
-function notifyBadRequest(ws, uuid, decoded, type) {
+function notifyBadRequest(ws, uuid, id, decoded, type) {
   loggerMain.warn(
-    `Bad request from ${uuid} (${user.id}): ${JSON.stringify(decoded, null, 2)}`
+    `Bad request from ${uuid} (${id}): ${JSON.stringify(decoded, null, 2)}`
   );
   ws.send(msgToJSON(typeOfMessage.badRequest, type));
 }
@@ -177,7 +176,7 @@ wss.on("connection", (ws, req) => {
     switch (type) {
       case typeOfMessage.login:
         if (!data.id) {
-          notifyBadRequest(ws, uuid, decoded, typeOfMessage.login);
+          notifyBadRequest(ws, uuid, null, decoded, typeOfMessage.login);
           break;
         }
         if (sockets[data.id]) {
@@ -198,7 +197,7 @@ wss.on("connection", (ws, req) => {
         break;
       case typeOfMessage.newDriver:
         if (!data.coords || !data.car) {
-          notifyBadRequest(ws, uuid, decoded, typeOfMessage.newDriver);
+          notifyBadRequest(ws, uuid, user.id, decoded, typeOfMessage.newDriver);
           break;
         }
         driverMap[user.id] = {
@@ -227,7 +226,13 @@ wss.on("connection", (ws, req) => {
         break;
       case typeOfMessage.newPassenger:
         if (!data.coords || !data.timestamp) {
-          notifyBadRequest(ws, uuid, decoded, typeOfMessage.newPassenger);
+          notifyBadRequest(
+            ws,
+            uuid,
+            user.id,
+            decoded,
+            typeOfMessage.newPassenger
+          );
           break;
         }
         passengerMap[user.id] = {
@@ -254,7 +259,13 @@ wss.on("connection", (ws, req) => {
       case typeOfMessage.updateDriver:
         if (!driverMap[user.id]) break;
         if (!data.coords) {
-          notifyBadRequest(ws, uuid, decoded, typeOfMessage.updateDriver);
+          notifyBadRequest(
+            ws,
+            uuid,
+            user.id,
+            decoded,
+            typeOfMessage.updateDriver
+          );
           break;
         }
         driverMap[user.id].picture = user.picture;
@@ -281,7 +292,13 @@ wss.on("connection", (ws, req) => {
       case typeOfMessage.updatePassenger:
         if (!passengerMap[user.id]) break;
         if (!data.coords) {
-          notifyBadRequest(ws, uuid, decoded, typeOfMessage.updatePassenger);
+          notifyBadRequest(
+            ws,
+            uuid,
+            user.id,
+            decoded,
+            typeOfMessage.updatePassenger
+          );
           break;
         }
         passengerMap[user.id].picture = user.picture;
@@ -326,7 +343,13 @@ wss.on("connection", (ws, req) => {
       case typeOfMessage.pingDriver:
         if (!passengerMap[user.id] || !passengerMap[user.id].driver_id) break;
         if (data == undefined) {
-          notifyBadRequest(ws, uuid, decoded, typeOfMessage.pingDriver);
+          notifyBadRequest(
+            ws,
+            uuid,
+            user.id,
+            decoded,
+            typeOfMessage.pingDriver
+          );
           break;
         }
         const driver_id = passengerMap[user.id].driver_id;
@@ -388,13 +411,25 @@ wss.on("connection", (ws, req) => {
           !data.ratings ||
           data.users.length != data.ratings.length
         ) {
-          notifyBadRequest(ws, uuid, decoded, typeOfMessage.sendRatings);
+          notifyBadRequest(
+            ws,
+            uuid,
+            user.id,
+            decoded,
+            typeOfMessage.sendRatings
+          );
           break;
         }
         for (let i = 0; i < data.users.length; i++) {
           if (data.ratings[i] == 0) continue;
           if (data.ratings[i] < 0 || data.ratings[i] > 5) {
-            notifyBadRequest(ws, uuid, decoded, typeOfMessage.sendRatings);
+            notifyBadRequest(
+              ws,
+              uuid,
+              user.id,
+              decoded,
+              typeOfMessage.sendRatings
+            );
             break;
           }
           if (
@@ -405,14 +440,26 @@ wss.on("connection", (ws, req) => {
             ) &&
             false
           ) {
-            notifyBadRequest(ws, uuid, decoded, typeOfMessage.sendRatings);
+            notifyBadRequest(
+              ws,
+              uuid,
+              user.id,
+              decoded,
+              typeOfMessage.sendRatings
+            );
             break;
           } else if (
             passengerMap[user.id] &&
             !passengerMap[user.id].driver_id == data.users[i] &&
             false
           ) {
-            notifyBadRequest(ws, uuid, decoded, typeOfMessage.sendRatings);
+            notifyBadRequest(
+              ws,
+              uuid,
+              user.id,
+              decoded,
+              typeOfMessage.sendRatings
+            );
             break;
           }
           const targetUser = await getUser(data.users[i]);
@@ -428,7 +475,7 @@ wss.on("connection", (ws, req) => {
         break;
       case typeOfMessage.addCar:
         if (!data.model || !data.license || !data.seats) {
-          notifyBadRequest(ws, uuid, decoded, typeOfMessage.addCar);
+          notifyBadRequest(ws, uuid, user.id, decoded, typeOfMessage.addCar);
           break;
         }
         const car = await createCar(user.id, data);
@@ -441,9 +488,7 @@ wss.on("connection", (ws, req) => {
             2
           )}`
         );
-        //TODO: Tidy up NSFW handling
-        if (!car.picture) break;
-        {
+        if (car.picture) {
           let picture = car.picture;
           let car_id = car.car_id;
           isNSFW(`public/images/cars/${picture}`).then((isNSFW) => {
@@ -476,24 +521,20 @@ wss.on("connection", (ws, req) => {
           !data.seats ||
           !user.cars[data.car_id]
         ) {
-          notifyBadRequest(ws, uuid, decoded, typeOfMessage.updateCar);
+          notifyBadRequest(ws, uuid, user.id, decoded, typeOfMessage.updateCar);
           break;
         }
+        const oldPicture = user.cars[data.car_id].picture;
         const newCar = await updateUserCar(user.id, data);
-        if (
-          user.cars[data.car_id].picture &&
-          data.picture != user.cars[data.car_id].picture
-        ) {
-          deletePicture("cars/" + user.cars[data.car_id].picture);
+        if (oldPicture && data.picture != oldPicture) {
+          deletePicture("cars/" + oldPicture);
         }
         user.cars[newCar.car_id] = newCar;
         ws.send(msgToJSON(typeOfMessage.addCar, newCar));
         loggerMain.info(
-          `Updated car of ${user.id}: ${JSON.stringify(newCar, null, 2)}`
+          `Updated car of ${user.id} to: ${JSON.stringify(newCar, null, 2)}`
         );
-        //TODO: Tidy up NSFW handling
-        if (!newCar.picture) break;
-        {
+        if (newCar.picture && newCar.picture != oldPicture) {
           let picture = newCar.picture;
           let car_id = newCar.car_id;
           isNSFW(`public/images/cars/${picture}`).then((isNSFW) => {
@@ -514,7 +555,13 @@ wss.on("connection", (ws, req) => {
         break;
       case typeOfMessage.updateUserPicture:
         if (!data) {
-          notifyBadRequest(ws, uuid, decoded, typeOfMessage.updateUserPicture);
+          notifyBadRequest(
+            ws,
+            uuid,
+            user.id,
+            decoded,
+            typeOfMessage.updateUserPicture
+          );
           break;
         }
         let newPicture = (await updateUserPicture(user.id, data)).picture;
@@ -527,7 +574,6 @@ wss.on("connection", (ws, req) => {
         }
         user.picture = newPicture;
         ws.send(msgToJSON(typeOfMessage.updateUserPicture, newPicture));
-        //TODO: Tidy up NSFW handling
         isNSFW(`public/images/users/${newPicture}`).then((isNSFW) => {
           if (!isNSFW) return;
           loggerMain.warn(`NSFW image detected at images/users/${newPicture}}`);
@@ -551,7 +597,7 @@ wss.on("connection", (ws, req) => {
         break;
       case typeOfMessage.removeCar:
         if (!data) {
-          notifyBadRequest(ws, uuid, decoded, typeOfMessage.removeCar);
+          notifyBadRequest(ws, uuid, user.id, decoded, typeOfMessage.removeCar);
           break;
         }
         if (!user.cars[data]) break;
@@ -578,6 +624,7 @@ wss.on("connection", (ws, req) => {
         stopPassenger(user.id);
         delete sockets[user.id];
         loggerMain.info(`Signed out ${user.id}`);
+        ws.close();
         break;
       default:
         ws.send(
