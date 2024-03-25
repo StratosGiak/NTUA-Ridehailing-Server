@@ -21,6 +21,17 @@ app.listen(process.env.MEDIA_PORT, () => {
   );
 });
 
+if (process.env.CRON_PING_KEY && process.env.CRON_INTERVAL_MS) {
+  fetch(`https://hc-ping.com/${process.env.CRON_PING_KEY}/ridehailing-media`);
+  setInterval(
+    () =>
+      fetch(
+        `https://hc-ping.com/${process.env.CRON_PING_KEY}/ridehailing-media`
+      ),
+    process.env.CRON_INTERVAL_MS
+  );
+}
+
 const maxImageSize = process.env.MAX_IMAGE_SIZE;
 
 const uploadCar = multer({

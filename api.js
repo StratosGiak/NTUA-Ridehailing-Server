@@ -128,6 +128,15 @@ function deletePicture(pictureURL) {
     });
 }
 
+if (process.env.CRON_PING_KEY && process.env.CRON_INTERVAL_MS) {
+  fetch(`https://hc-ping.com/${process.env.CRON_PING_KEY}/ridehailing-api`);
+  setInterval(
+    () =>
+      fetch(`https://hc-ping.com/${process.env.CRON_PING_KEY}/ridehailing-api`),
+    process.env.CRON_INTERVAL_MS
+  );
+}
+
 wss.on("connection", (ws, req) => {
   const uuid = crypto.randomUUID();
   let user;
