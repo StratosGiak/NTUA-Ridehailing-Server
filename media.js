@@ -11,7 +11,6 @@ if (process.env.NODE_ENV === "production") {
 }
 
 var app = express();
-
 app.use(express.static("public"));
 app.listen(process.env.MEDIA_PORT, () => {
   loggerMedia.info(
@@ -36,7 +35,6 @@ const maxImageSize = process.env.MAX_IMAGE_SIZE;
 
 const uploadCar = multer({
   dest: "./public/images/cars",
-  limits: { fileSize: maxImageSize },
   fileFilter: (req, file, callback) => {
     if (file.mimetype == "image/jpeg" || file.mimetype == "image/png") {
       return callback(null, true);
@@ -49,7 +47,6 @@ const uploadCar = multer({
 });
 const uploadUser = multer({
   dest: "./public/images/users",
-  limits: { fileSize: maxImageSize },
   fileFilter: (req, file, callback) => {
     if (file.mimetype == "image/jpeg" || file.mimetype == "image/png") {
       return callback(null, true);
