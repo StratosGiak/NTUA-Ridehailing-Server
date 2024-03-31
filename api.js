@@ -624,7 +624,7 @@ wss.on("connection", (ws, req) => {
         stopPassenger(user.id);
         delete sockets[user.id];
         loggerMain.info(`Signed out ${user.id}`);
-        ws.close();
+        ws.close(1000, "user requested signout");
         break;
       default:
         ws.send(
