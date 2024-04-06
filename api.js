@@ -130,18 +130,30 @@ if (process.env.CRON_PING_KEY && process.env.CRON_INTERVAL_MS) {
   );
 }
 
-wss.on("connection", (ws, req) => {
+wss.on("connection", async (ws, req) => {
+  let idToken = getToken(req.headers["sec-websocket-protocol"]);
+  loggerMain.info(
+    "Attempted connection with " + JSON.stringify(idToken, null, 2)
+  );
+  if (!idToken || !idToken.name || !idToken.email) {
+    ws.close();
+    return;
+  }
   const uuid = crypto.randomUUID();
-  let user;
-  loggerMain.info(`Connected client ${uuid}`);
+  let id = idToken.email.split("@")[0];
+  let name = idToken.name;
+  let user = await getUser(id);
+  if (!user) {
+    loggerMain.info(`ID ${id} not found. Creating...`);
+    user = await createUser(id, name);
+  }
+  ws.send(msgToJSON(typeOfMessage.login, user));
+  sockets[user.id] = ws;
+  loggerMain.info(`Client logged in: ${JSON.stringify(user, null, 2)}`);
   ws.on("error", (error) => {
     loggerMain.error(error);
   });
   ws.on("close", () => {
-    if (!user) {
-      loggerMain.info(`Disconnected client ${uuid}`);
-      return;
-    }
     stopDriver(user.id);
     stopPassenger(user.id);
     delete sockets[user.id];
@@ -161,34 +173,7 @@ wss.on("connection", (ws, req) => {
     loggerTraffic.info(
       `Received from ${uuid}: ${type} data: ${JSON.stringify(data, null, 2)}`
     );
-    if (!user && type != typeOfMessage.login) {
-      loggerTraffic.info(
-        `Client ${uuid} tried to send message without being logged in`
-      );
-      return;
-    }
     switch (type) {
-      case typeOfMessage.login:
-        if (!data.id) {
-          notifyBadRequest(ws, uuid, null, decoded, typeOfMessage.login);
-          break;
-        }
-        if (sockets[data.id]) {
-          loggerMain.info(
-            `Client ${uuid} tried to log in while already logged in`
-          );
-          ws.send(msgToJSON(typeOfMessage.login, "occupied"));
-          break;
-        }
-        user = await getUser(data.id);
-        if (user == undefined) {
-          loggerMain.info(`ID ${data.id} not found. Creating...`);
-          user = await createUser(data.id, data.name);
-        }
-        ws.send(msgToJSON(typeOfMessage.login, user));
-        sockets[user.id] = ws;
-        loggerMain.info(`Client logged in: ${JSON.stringify(user, null, 2)}`);
-        break;
       case typeOfMessage.newDriver:
         if (!data.coords || !data.car) {
           notifyBadRequest(ws, uuid, user.id, decoded, typeOfMessage.newDriver);

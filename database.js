@@ -32,6 +32,7 @@ export async function getUser(user_id) {
   const [user] = await pool.execute(`SELECT * FROM users WHERE id = ?`, [
     user_id,
   ]);
+  if (!user[0]) return;
   const [cars] = await pool.execute(`SELECT * FROM cars WHERE user_id = ?`, [
     user_id,
   ]);
