@@ -15,14 +15,8 @@ import sampleSize from "lodash.samplesize";
 import removeWhere from "lodash.remove";
 import findWhere from "lodash.find";
 import { loggerMain, loggerTraffic } from "./log/logger.js";
-import dotenv from "dotenv";
 import { isNSFW } from "./ml.js";
-
-if (process.env.NODE_ENV === "production") {
-  dotenv.config({ path: "./.env.production" });
-} else {
-  dotenv.config({ path: "./.env.development" });
-}
+import { getToken } from "./auth.js";
 
 const typeOfMessage = Object.freeze({
   login: "!LOGIN",

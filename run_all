@@ -6,16 +6,18 @@ if [ $# -ne 1 ]; then
 fi
 
 if [ "$1" == "-production" ]; then
-  export NODE_ENV="production"
-elif [ "$1" == "-development" ]; then
-  export NODE_ENV="development"
+  mode="production"
 else
-  exit 1
+  mode="development"
 fi
 
-echo "Starting server in $1 mode..."
+export NODE_ENV=$mode
 
-parallel --lb ::: 'sudo node api.js' 'sudo node media.js' & pid=$!
+echo "Starting server in $mode mode..."
+
+envpath=".env.${mode}"
+
+parallel --lb ::: 'sudo node --env-file .env.development api.js' 'sudo node --env-file .env.development media.js' & pid=$!
 
 wait $pid
 

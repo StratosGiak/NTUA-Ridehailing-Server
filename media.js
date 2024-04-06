@@ -2,13 +2,6 @@ import express from "express";
 import multer from "multer";
 import fs from "fs/promises";
 import { loggerMedia } from "./log/logger.js";
-import dotenv from "dotenv";
-
-if (process.env.NODE_ENV === "production") {
-  dotenv.config({ path: "./.env.production" });
-} else {
-  dotenv.config({ path: "./.env.development" });
-}
 
 var app = express();
 app.use(express.static("public"));
