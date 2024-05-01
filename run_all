@@ -7,8 +7,10 @@ fi
 
 if [ "$1" == "-production" ]; then
   mode="production"
+  export TF_CPP_MIN_LOG_LEVEL='3'
 else
   mode="development"
+  export TF_CPP_MIN_LOG_LEVEL='0'
 fi
 
 export NODE_ENV=$mode
@@ -17,7 +19,7 @@ echo "Starting server in $mode mode..."
 
 envpath=".env.${mode}"
 
-parallel --lb ::: 'sudo node --env-file .env.development api.js' 'sudo node --env-file .env.development media.js' & pid=$!
+parallel --lb ::: "node --env-file=.env --env-file=${envpath} api.js" "node --env-file=.env --env-file=${envpath} media.js" & pid=$!
 
 wait $pid
 
