@@ -12,7 +12,6 @@ const pool = mysql
 await pool.execute(`
 CREATE TABLE IF NOT EXISTS \`users\` (
   \`id\` varchar(45) NOT NULL,
-  \`name\` varchar(45) NOT NULL DEFAULT '',
   \`picture\` varchar(45) DEFAULT NULL,
   \`ratings_sum\` int NOT NULL DEFAULT '0',
   \`ratings_count\` int NOT NULL DEFAULT '0',
@@ -77,10 +76,10 @@ export async function getCar(car_id) {
   return car[0];
 }
 
-export async function createUser(user_id, name) {
+export async function createUser(user_id) {
   const [result, fields] = await pool.execute(
-    `INSERT INTO users (id, name) VALUES (?, ?)`,
-    [user_id, name]
+    `INSERT INTO users (id) VALUES (?)`,
+    [user_id]
   );
   return getUser(user_id);
 }

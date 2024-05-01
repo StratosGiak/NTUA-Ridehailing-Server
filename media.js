@@ -5,25 +5,6 @@ import { loggerMedia } from "./log/logger.js";
 
 var app = express();
 app.use(express.static("public"));
-app.listen(process.env.MEDIA_PORT, () => {
-  loggerMedia.info(
-    `Started media server on port ${process.env.MEDIA_PORT} (${
-      process.env.NODE_ENV === "production" ? "production" : "development"
-    })`
-  );
-});
-
-if (process.env.CRON_PING_KEY && process.env.CRON_INTERVAL_MS) {
-  fetch(`https://hc-ping.com/${process.env.CRON_PING_KEY}/ridehailing-media`);
-  setInterval(
-    () =>
-      fetch(
-        `https://hc-ping.com/${process.env.CRON_PING_KEY}/ridehailing-media`
-      ),
-    process.env.CRON_INTERVAL_MS
-  );
-}
-
 const maxImageSize = process.env.MAX_IMAGE_SIZE;
 
 const uploadCar = multer({
@@ -116,3 +97,19 @@ app.delete("/images/cars/:filename", (req, res) => {
       });
   }
 });
+
+app.listen(process.env.MEDIA_PORT, () => {
+  loggerMedia.info(
+    `Started media server on port ${process.env.MEDIA_PORT} (${
+      process.env.NODE_ENV === "production" ? "production" : "development"
+    })`
+  );
+});
+
+if (process.env.CRON_PING_URL && process.env.CRON_INTERVAL_MS) {
+  fetch(`${process.env.CRON_PING_URL}/ridehailing-media`);
+  setInterval(
+    () => fetch(`${process.env.CRON_PING_URL}/ridehailing-media`),
+    process.env.CRON_INTERVAL_MS
+  );
+}

@@ -1,4 +1,5 @@
 import { WebSocketServer } from "ws";
+import { createServer } from "http";
 import {
   getAllUsers,
   getUser,
@@ -16,7 +17,7 @@ import removeWhere from "lodash.remove";
 import findWhere from "lodash.find";
 import { loggerMain, loggerTraffic } from "./log/logger.js";
 import { isNSFW } from "./ml.js";
-import { getToken } from "./auth.js";
+import { createRemoteJWKSet, jwtVerify } from "jose";
 
 const typeOfMessage = Object.freeze({
   login: "!LOGIN",
@@ -44,16 +45,6 @@ const typeOfMessage = Object.freeze({
   message: "!MESSAGE",
   signout: "!SIGNOUT",
 });
-
-const wss = new WebSocketServer({
-  port: process.env.API_PORT,
-  maxPayload: 2e3,
-});
-loggerMain.info(
-  `Started main server on port ${process.env.API_PORT} (${
-    process.env.NODE_ENV === "production" ? "production" : "development"
-  })`
-);
 
 var driverMap = {};
 var passengerMap = {};
@@ -121,38 +112,90 @@ function deletePicture(pictureURL) {
     });
 }
 
-if (process.env.CRON_PING_KEY && process.env.CRON_INTERVAL_MS) {
-  fetch(`https://hc-ping.com/${process.env.CRON_PING_KEY}/ridehailing-api`);
-  setInterval(
-    () =>
-      fetch(`https://hc-ping.com/${process.env.CRON_PING_KEY}/ridehailing-api`),
-    process.env.CRON_INTERVAL_MS
+async function authenticate(req, callback) {
+  let idToken = req.headers["sec-websocket-protocol"];
+  loggerTraffic.info(
+    "Connection attempted with token: " + JSON.stringify(idToken, null, 2)
   );
+  if (!idToken) return;
+  let decodedToken;
+  try {
+    decodedToken = (await jwtVerify(idToken, JWKS)).payload;
+  } catch (error) {
+    loggerMain.warn(error);
+    return;
+  }
+  if (!decodedToken || !decodedToken.name || !decodedToken.email) {
+    loggerMain.warn(
+      `Client tried to connect with invalid info: ` +
+        JSON.stringify(decodedToken, null, 2)
+    );
+    return;
+  }
+  return {
+    id: decodedToken.email.split("@")[0],
+    name: decodedToken.name,
+    givenName: decodedToken.given_name,
+  };
 }
 
-wss.on("connection", async (ws, req) => {
-  let idToken = getToken(req.headers["sec-websocket-protocol"]);
-  loggerMain.info(
-    "Attempted connection with " + JSON.stringify(idToken, null, 2)
-  );
-  if (!idToken || !idToken.name || !idToken.email) {
-    ws.close();
+const JWKS = createRemoteJWKSet(new URL(process.env.JWKS));
+
+const server = createServer();
+const wss = new WebSocketServer({
+  maxPayload: 2e3,
+  noServer: true,
+});
+
+server.on("upgrade", async (req, socket, head) => {
+  socket.on("error", (err) => {
+    loggerMain.error(err);
+  });
+
+  let credentials = await authenticate(req);
+  if (!credentials) {
+    socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
+    loggerMain.warn(
+      `Error authenticating: ${req.headers["sec-websocket-protocol"]}`
+    );
+    socket.destroy();
+    return;
+  }
+
+  socket.removeAllListeners("error");
+  wss.handleUpgrade(req, socket, head, (ws) => {
+    wss.emit("connection", ws, req, credentials);
+  });
+});
+
+wss.on("connection", async (ws, req, credentials) => {
+  if (!credentials || !credentials.id || !credentials.name) {
+    ws.close(4002, "faulty credentials");
+    return;
+  }
+  if (sockets[credentials.id]) {
+    loggerMain.warn(
+      `Client ${credentials.id} tried to connect while already connected`
+    );
+    ws.close(4001, "user already connected");
     return;
   }
   const uuid = crypto.randomUUID();
-  let id = idToken.email.split("@")[0];
-  let name = idToken.name;
-  let user = await getUser(id);
+  let user = await getUser(credentials.id);
   if (!user) {
-    loggerMain.info(`ID ${id} not found. Creating...`);
-    user = await createUser(id, name);
+    loggerMain.info(`ID ${credentials.id} not found. Creating new user...`);
+    user = await createUser(credentials.id);
   }
+  user.name = credentials.name;
+  user.givenName = credentials.givenName;
   ws.send(msgToJSON(typeOfMessage.login, user));
   sockets[user.id] = ws;
   loggerMain.info(`Client logged in: ${JSON.stringify(user, null, 2)}`);
+
   ws.on("error", (error) => {
     loggerMain.error(error);
   });
+
   ws.on("close", () => {
     stopDriver(user.id);
     stopPassenger(user.id);
@@ -189,6 +232,7 @@ wss.on("connection", async (ws, req) => {
           car: data.car,
           passengers: [],
         };
+        stopPassenger(user.id);
         ws.send(msgToJSON(typeOfMessage.newDriver, {}));
         loggerMain.info(
           `New driver: ${JSON.stringify(
@@ -214,6 +258,7 @@ wss.on("connection", async (ws, req) => {
           );
           break;
         }
+        stopDriver(user.id);
         passengerMap[user.id] = {
           id: user.id,
           name: user.name,
@@ -223,6 +268,7 @@ wss.on("connection", async (ws, req) => {
           coords: data.coords,
           timestamp: data.timestamp,
         };
+        delete driverMap[user.id];
         loggerMain.info(
           `New passenger: ${JSON.stringify(
             {
@@ -613,3 +659,19 @@ wss.on("connection", async (ws, req) => {
     }
   });
 });
+
+server.listen(process.env.API_PORT, () => {
+  loggerMain.info(
+    `Started main server on port ${process.env.API_PORT} (${
+      process.env.NODE_ENV === "production" ? "production" : "development"
+    })`
+  );
+});
+
+if (process.env.CRON_PING_URL && process.env.CRON_INTERVAL_MS) {
+  fetch(`${process.env.CRON_PING_URL}/ridehailing-api`);
+  setInterval(
+    () => fetch(`${process.env.CRON_PING_URL}/ridehailing-api`),
+    process.env.CRON_INTERVAL_MS
+  );
+}
