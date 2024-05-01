@@ -49,6 +49,7 @@ const typeOfMessage = Object.freeze({
 var driverMap = {};
 var passengerMap = {};
 var sockets = {};
+var pendingRatings = {};
 
 function msgToJSON(type, data) {
   return JSON.stringify({ type: type, data: data });
@@ -421,20 +422,22 @@ wss.on("connection", async (ws, req, credentials) => {
           sockets[passenger.id].send(
             msgToJSON(typeOfMessage.arrivedDestination, {})
           );
+          pendingRatings[passenger.id] = [user.id];
         });
+        pendingRatings[user.id] = driverMap[user.id].passengers;
         loggerMain.info(
-          `Driver ${
-            user.id
-          } arrived at destination with passengers ${JSON.stringify(
-            driverMap[user.id].passengers
-          )}`
+          `Driver ${user.id} arrived at destination with passengers ${
+            driverMap[user.id].passengers.name
+          }`
         );
         break;
       case typeOfMessage.sendRatings:
         if (
-          !data.users ||
+          !data.ids ||
           !data.ratings ||
-          data.users.length != data.ratings.length
+          !Array.isArray(data.ids) ||
+          !Array.isArray(data.ratings) ||
+          data.ids.length != data.ratings.length
         ) {
           notifyBadRequest(
             ws,
@@ -445,25 +448,13 @@ wss.on("connection", async (ws, req, credentials) => {
           );
           break;
         }
-        for (let i = 0; i < data.users.length; i++) {
-          if (data.ratings[i] == 0) continue;
-          if (data.ratings[i] < 0 || data.ratings[i] > 5) {
-            notifyBadRequest(
-              ws,
-              uuid,
-              user.id,
-              decoded,
-              typeOfMessage.sendRatings
-            );
-            break;
-          }
+        for (let i = 0; i < data.ids.length; i++) {
           if (
-            driverMap[user.id] &&
-            !findWhere(
-              driverMap[user.id].passengers,
-              (passenger) => passenger.id == data.users[i]
-            ) &&
-            false
+            typeof data.ids[i] != "string" ||
+            typeof data.ratings[i] != "number" ||
+            data.ratings[i] < 0 ||
+            data.ratings[i] > 5 ||
+            removeWhere(pendingRatings[user.id], (e) => e).length == 0
           ) {
             notifyBadRequest(
               ws,
@@ -472,29 +463,17 @@ wss.on("connection", async (ws, req, credentials) => {
               decoded,
               typeOfMessage.sendRatings
             );
-            break;
-          } else if (
-            passengerMap[user.id] &&
-            !passengerMap[user.id].driver_id == data.users[i] &&
-            false
-          ) {
-            notifyBadRequest(
-              ws,
-              uuid,
-              user.id,
-              decoded,
-              typeOfMessage.sendRatings
-            );
-            break;
+            continue;
           }
-          const targetUser = await getUser(data.users[i]);
+          if (data.ratings[i] == 0) continue;
+          const targetUser = await getUser(data.ids[i]);
           updateUserRating(
             targetUser.id,
             targetUser.ratings_sum + data.ratings[i],
             targetUser.ratings_count + 1
           );
           loggerMain.info(
-            `User ${user.id} rated user ${data.users[i]} with ${data.ratings[i]} stars`
+            `User ${user.id} rated user ${data.ids[i]} with ${data.ratings[i]} stars`
           );
         }
         break;
