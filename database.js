@@ -9,6 +9,32 @@ const pool = mysql
   })
   .promise();
 
+await pool.execute(`
+CREATE TABLE IF NOT EXISTS \`users\` (
+  \`id\` varchar(45) NOT NULL,
+  \`name\` varchar(45) NOT NULL DEFAULT '',
+  \`picture\` varchar(45) DEFAULT NULL,
+  \`ratings_sum\` int NOT NULL DEFAULT '0',
+  \`ratings_count\` int NOT NULL DEFAULT '0',
+  PRIMARY KEY (\`id\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+`);
+
+await pool.execute(`
+CREATE TABLE IF NOT EXISTS \`cars\` (
+  \`car_id\` int NOT NULL AUTO_INCREMENT,
+  \`user_id\` varchar(45) NOT NULL,
+  \`model\` varchar(45) NOT NULL,
+  \`seats\` int NOT NULL,
+  \`license\` varchar(45) NOT NULL,
+  \`picture\` varchar(45) DEFAULT NULL,
+  \`color\` int unsigned DEFAULT NULL,
+  PRIMARY KEY (\`car_id\`),
+  KEY \`user_id_idx\` (\`user_id\`),
+  CONSTRAINT \`user_id\` FOREIGN KEY (\`user_id\`) REFERENCES \`users\` (\`id\`) ON UPDATE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=91 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+`);
+
 export async function getAllUsers() {
   const [users] = await pool.execute("SELECT * FROM users");
   const [cars] = await pool.execute("SELECT * FROM cars");
