@@ -1,7 +1,7 @@
 import express from "express";
 import multer from "multer";
 import fs from "fs/promises";
-import { loggerMedia } from "./log/logger.js";
+import { loggerMedia } from "../log/logger.js";
 
 var app = express();
 app.use(express.static("public"));

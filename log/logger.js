@@ -7,7 +7,7 @@ const customFormat = format.printf(({ level, message, timestamp }) => {
 
 export const loggerMain = createLogger({
   transports: [
-    new transports.Console(),
+    new transports.Console({ silent: process.env.NODE_ENV === "production" }),
     new transports.DailyRotateFile({
       level: "info",
       filename: "./log/logs/api.%DATE%.log",
@@ -41,7 +41,7 @@ export const loggerTraffic = createLogger({
 
 export const loggerMedia = createLogger({
   transports: [
-    new transports.Console(),
+    new transports.Console({ silent: process.env.NODE_ENV === "production" }),
     new transports.DailyRotateFile({
       level: "info",
       filename: "./log/logs/media.%DATE%.log",
