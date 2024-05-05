@@ -1,5 +1,5 @@
 .env*
 *.log*
 public
-test.js
-node_modules/
+node_modules
+built
