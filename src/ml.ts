@@ -6,12 +6,19 @@ import {
   enableProdMode,
   loadLayersModel,
   loadGraphModel,
+  GraphModel,
+  Tensor,
 } from "@tensorflow/tfjs-node";
-enableProdMode();
+import { TFSavedModel } from "@tensorflow/tfjs-node/dist/saved_model.js";
+//enableProdMode();
 
 const modelNSFW = await tfnode.loadSavedModel("./tflite_models/nsfw_detection");
 
-async function classifyImageFile(model, softmax, path) {
+async function classifyImageFile(
+  model: TFSavedModel,
+  path: string,
+  softmax: boolean
+) {
   const imageBuffer = await fs.readFile(path);
   const predictions = tftidy(() => {
     const tensor = tfnode
@@ -19,7 +26,8 @@ async function classifyImageFile(model, softmax, path) {
       .resizeBilinear([224, 224])
       .div(255)
       .expandDims(0);
-    const output = model.predict(tensor).unstack()[0];
+    const output = model.predict(tensor);
+    if (!(output instanceof Tensor)) throw new Error("Tensor error");
     const predictions = softmax ? output.softmax() : output;
     return predictions;
   });
@@ -28,8 +36,8 @@ async function classifyImageFile(model, softmax, path) {
   return predictionArray;
 }
 
-export async function isNSFW(path) {
-  return classifyImageFile(modelNSFW, false, path)
+export async function isNSFW(path: string) {
+  return classifyImageFile(modelNSFW, path, false)
     .then((values) => {
       console.log(values);
       return values[0] + values[2] < 0.1;
