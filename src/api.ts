@@ -1,5 +1,5 @@
-import { WebSocketServer } from "ws";
-import { createServer } from "http";
+import { WebSocket, WebSocketServer } from "ws";
+import { IncomingMessage, createServer } from "http";
 import {
   getAllUsers,
   getUser,
@@ -18,8 +18,20 @@ import findWhere from "lodash.find";
 import { loggerMain, loggerTraffic } from "../log/logger.js";
 import { isNSFW } from "./ml.js";
 import { createRemoteJWKSet, jwtVerify } from "jose";
+import { cleanEnv, str, num } from "envalid";
+import type { Credentials, Driver, Passenger } from "./types/types.js";
 
-const typeOfMessage = Object.freeze({
+const env = cleanEnv(process.env, {
+  API_PORT: str(),
+  MEDIA_HOST: str(),
+  MEDIA_PORT: str(),
+  JWKS: str(),
+  CRON_PING_URL: str(),
+  CRON_INTERVAL_MS: num(),
+  NODE_ENV: str({ choices: ["production", "development"] }),
+});
+
+const typeOfMessage = {
   login: "!LOGIN",
   updateDriver: "!UPDATEDRIVER",
   updatePassenger: "!UPDATEPASSENGER",
@@ -44,63 +56,68 @@ const typeOfMessage = Object.freeze({
   badRequest: "!BADREQUEST",
   message: "!MESSAGE",
   signout: "!SIGNOUT",
-});
+} as const;
 
-var driverMap = {};
-var passengerMap = {};
-var sockets = {};
-var pendingRatings = {};
+var driverMap: { [id: string]: Driver } = {};
+var passengerMap: { [id: string]: Passenger } = {};
+var sockets: { [id: string]: WebSocket } = {};
+var pendingRatings: { [id: string]: string[] } = {};
 
-function msgToJSON(type, data) {
+function msgToJSON(type: string, data: any) {
   return JSON.stringify({ type: type, data: data });
 }
 
-function notifyBadRequest(ws, uuid, id, decoded, type) {
+function notifyBadRequest(
+  ws: WebSocket,
+  uuid: string,
+  id: string,
+  decoded: any,
+  type: string
+) {
   loggerMain.warn(
     `Bad request from ${uuid} (${id}): ${JSON.stringify(decoded, null, 2)}`
   );
   ws.send(msgToJSON(typeOfMessage.badRequest, type));
 }
 
-function stopDriver(id) {
+function stopDriver(id: string) {
   if (!driverMap[id]) return;
   driverMap[id].passengers.forEach((passenger) => {
-    if (passengerMap[passenger.id]) {
-      delete passengerMap[passenger.id].driver_id;
+    if (passengerMap[passenger]) {
+      delete passengerMap[passenger].driver_id;
     }
-    if (sockets[passenger.id]) {
-      sockets[passenger.id].send(msgToJSON(typeOfMessage.getDriver, {}));
+    if (sockets[passenger]) {
+      sockets[passenger].send(msgToJSON(typeOfMessage.getDriver, {}));
     }
   });
   delete driverMap[id];
 }
 
-function stopPassenger(id, deletePassenger) {
+function stopPassenger(id: string, deletePassenger?: boolean) {
   if (
     !passengerMap[id] ||
     !passengerMap[id].driver_id ||
-    !driverMap[passengerMap[id].driver_id]
+    !driverMap[passengerMap[id].driver_id!]
   )
     return;
-  if (sockets[passengerMap[id].driver_id]) {
-    sockets[passengerMap[id].driver_id].send(
+  if (sockets[passengerMap[id].driver_id!]) {
+    sockets[passengerMap[id].driver_id!].send(
       msgToJSON(typeOfMessage.updatePassenger, {
         cancelled: id,
       })
     );
   }
   removeWhere(
-    driverMap[passengerMap[id].driver_id].passengers,
-    (passenger) => passenger.id == id
+    driverMap[passengerMap[id].driver_id!].passengers,
+    (passenger) => passenger == id
   );
   if (deletePassenger == undefined || deletePassenger) delete passengerMap[id];
 }
 
-function deletePicture(pictureURL) {
-  fetch(
-    `http://${process.env.MEDIA_HOST}:${process.env.MEDIA_PORT}/images/${pictureURL}`,
-    { method: "DELETE" }
-  )
+function deletePicture(pictureURL: string) {
+  fetch(`http://${env.MEDIA_HOST}:${env.MEDIA_PORT}/images/${pictureURL}`, {
+    method: "DELETE",
+  })
     .then((response) => {
       if (!response.ok) {
         loggerMain.warn(`FAILED to delete image at /images/${pictureURL}`);
@@ -113,7 +130,7 @@ function deletePicture(pictureURL) {
     });
 }
 
-async function authenticate(req, callback) {
+async function authenticate(req: IncomingMessage) {
   let idToken = req.headers["sec-websocket-protocol"];
   loggerTraffic.info(
     "Connection attempted with token: " + JSON.stringify(idToken, null, 2)
@@ -134,13 +151,13 @@ async function authenticate(req, callback) {
     return;
   }
   return {
-    id: decodedToken.email.split("@")[0],
-    name: decodedToken.name,
-    givenName: decodedToken.given_name,
+    id: (decodedToken.email as string).split("@")[0],
+    name: decodedToken.name as string,
+    given_name: decodedToken.given_name as string,
   };
 }
 
-const JWKS = createRemoteJWKSet(new URL(process.env.JWKS));
+const JWKS = createRemoteJWKSet(new URL(env.JWKS));
 
 const server = createServer();
 const wss = new WebSocketServer({
@@ -169,7 +186,7 @@ server.on("upgrade", async (req, socket, head) => {
   });
 });
 
-wss.on("connection", async (ws, req, credentials) => {
+wss.on("connection", async (ws: WebSocket, credentials: Credentials) => {
   if (!credentials || !credentials.id || !credentials.name) {
     ws.close(4002, "faulty credentials");
     return;
@@ -188,7 +205,7 @@ wss.on("connection", async (ws, req, credentials) => {
     user = await createUser(credentials.id);
   }
   user.name = credentials.name;
-  user.givenName = credentials.givenName;
+  user.given_name = credentials.given_name;
   ws.send(msgToJSON(typeOfMessage.login, user));
   sockets[user.id] = ws;
   loggerMain.info(`Client logged in: ${JSON.stringify(user, null, 2)}`);
@@ -204,7 +221,7 @@ wss.on("connection", async (ws, req, credentials) => {
     loggerMain.info(`Disconnected client ${user.id} (${uuid})`);
   });
 
-  ws.on("message", async (msg) => {
+  ws.on("message", async (msg: string) => {
     let decoded;
     try {
       decoded = JSON.parse(msg);
@@ -226,6 +243,7 @@ wss.on("connection", async (ws, req, credentials) => {
         driverMap[user.id] = {
           id: user.id,
           name: user.name,
+          given_name: user.given_name,
           picture: user.picture,
           ratings_count: user.ratings_count,
           ratings_sum: user.ratings_sum,
@@ -263,11 +281,11 @@ wss.on("connection", async (ws, req, credentials) => {
         passengerMap[user.id] = {
           id: user.id,
           name: user.name,
+          given_name: user.given_name,
           picture: user.picture,
           ratings_count: user.ratings_count,
           ratings_sum: user.ratings_sum,
           coords: data.coords,
-          timestamp: data.timestamp,
         };
         delete driverMap[user.id];
         loggerMain.info(
@@ -297,8 +315,8 @@ wss.on("connection", async (ws, req, credentials) => {
         driverMap[user.id].picture = user.picture;
         driverMap[user.id].coords = data.coords;
         driverMap[user.id].passengers.forEach((passenger) => {
-          if (sockets[passenger.id]) {
-            sockets[passenger.id].send(
+          if (sockets[passenger]) {
+            sockets[passenger].send(
               msgToJSON(typeOfMessage.getDriver, driverMap[user.id])
             );
           }
@@ -331,10 +349,10 @@ wss.on("connection", async (ws, req, credentials) => {
         passengerMap[user.id].coords = data.coords;
         if (
           passengerMap[user.id].driver_id &&
-          driverMap[passengerMap[user.id].driver_id] &&
-          sockets[passengerMap[user.id].driver_id]
+          driverMap[passengerMap[user.id].driver_id!] &&
+          sockets[passengerMap[user.id].driver_id!]
         ) {
-          sockets[passengerMap[user.id].driver_id].send(
+          sockets[passengerMap[user.id].driver_id!].send(
             msgToJSON(typeOfMessage.updatePassenger, passengerMap[user.id])
           );
         }
@@ -385,17 +403,17 @@ wss.on("connection", async (ws, req, credentials) => {
           break;
         }
         if (
-          !driverMap[driver_id] ||
-          driverMap[driver_id].passengers.length >=
-            driverMap[driver_id].car.seats
+          !driverMap[driver_id!] ||
+          driverMap[driver_id!].passengers.length >=
+            driverMap[driver_id!].car.seats
         ) {
           ws.send(msgToJSON(typeOfMessage.pingDriver, {}));
           delete passengerMap[user.id].driver_id;
           break;
         }
-        driverMap[driver_id].passengers.push(passengerMap[user.id]);
-        ws.send(msgToJSON(typeOfMessage.pingDriver, driverMap[driver_id]));
-        sockets[driver_id].send(
+        driverMap[driver_id!].passengers.push(user.id);
+        ws.send(msgToJSON(typeOfMessage.pingDriver, driverMap[driver_id!]));
+        sockets[driver_id!].send(
           msgToJSON(typeOfMessage.updatePassenger, passengerMap[user.id])
         );
         break;
@@ -419,15 +437,15 @@ wss.on("connection", async (ws, req, credentials) => {
       case typeOfMessage.arrivedDestination:
         if (!driverMap[user.id]) break;
         driverMap[user.id].passengers.forEach((passenger) => {
-          sockets[passenger.id].send(
+          sockets[passenger].send(
             msgToJSON(typeOfMessage.arrivedDestination, {})
           );
-          pendingRatings[passenger.id] = [user.id];
+          pendingRatings[passenger] = [user.id];
         });
         pendingRatings[user.id] = driverMap[user.id].passengers;
         loggerMain.info(
           `Driver ${user.id} arrived at destination with passengers ${
-            driverMap[user.id].passengers.name
+            driverMap[user.id].passengers
           }`
         );
         break;
@@ -639,18 +657,18 @@ wss.on("connection", async (ws, req, credentials) => {
   });
 });
 
-server.listen(process.env.API_PORT, () => {
+server.listen(env.API_PORT, () => {
   loggerMain.info(
-    `Started main server on port ${process.env.API_PORT} (${
-      process.env.NODE_ENV === "production" ? "production" : "development"
+    `Started main server on port ${env.API_PORT} (${
+      env.NODE_ENV === "production" ? "production" : "development"
     })`
   );
 });
 
-if (process.env.CRON_PING_URL && process.env.CRON_INTERVAL_MS) {
-  fetch(`${process.env.CRON_PING_URL}/ridehailing-api`);
+if (env.CRON_PING_URL && env.CRON_INTERVAL_MS) {
+  fetch(`${env.CRON_PING_URL}/ridehailing-api`);
   setInterval(
-    () => fetch(`${process.env.CRON_PING_URL}/ridehailing-api`),
-    process.env.CRON_INTERVAL_MS
+    () => fetch(`${env.CRON_PING_URL}/ridehailing-api`),
+    env.CRON_INTERVAL_MS
   );
 }

@@ -4,7 +4,8 @@
     "allowJs": true,
     "target": "ES2017",
     "moduleResolution": "NodeNext",
-    "module": "NodeNext"
+    "module": "NodeNext",
+    "strict": true
   },
   "include": ["./src/**/*"]
 }
