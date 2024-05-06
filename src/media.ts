@@ -1,11 +1,18 @@
 import express from "express";
 import multer from "multer";
 import fs from "fs/promises";
-import { loggerMedia } from "../log/logger.js";
+import { loggerMedia } from "./logger.js";
+import { cleanEnv, num, str } from "envalid";
+
+const env = cleanEnv(process.env, {
+  MEDIA_PORT: str(),
+  CRON_PING_URL: str(),
+  CRON_INTERVAL_MS: num(),
+  NODE_ENV: str({ choices: ["production", "development"] }),
+});
 
 var app = express();
 app.use(express.static("public"));
-const maxImageSize = process.env.MAX_IMAGE_SIZE;
 
 const uploadCar = multer({
   dest: "./public/images/cars",
@@ -13,10 +20,7 @@ const uploadCar = multer({
     if (file.mimetype == "image/jpeg" || file.mimetype == "image/png") {
       return callback(null, true);
     }
-    return callback(
-      new Error(`File type is not image: ${file.mimetype}`),
-      false
-    );
+    return callback(new Error(`File type is not image: ${file.mimetype}`));
   },
 });
 const uploadUser = multer({
@@ -25,16 +29,13 @@ const uploadUser = multer({
     if (file.mimetype == "image/jpeg" || file.mimetype == "image/png") {
       return callback(null, true);
     }
-    return callback(
-      new Error(`File type is not image: ${file.mimetype}`),
-      false
-    );
+    return callback(new Error(`File type is not image: ${file.mimetype}`));
   },
 });
 
 app.post("/images/cars", (req, res) => {
   uploadCar.single("file")(req, res, (err) => {
-    if (err) {
+    if (err || !req.file) {
       loggerMedia.error(err);
       res.status(500).send();
     } else {
@@ -45,7 +46,7 @@ app.post("/images/cars", (req, res) => {
 
 app.post("/images/users", (req, res) => {
   uploadUser.single("file")(req, res, (err) => {
-    if (err) {
+    if (err || !req.file) {
       loggerMedia.error(err);
       res.status(500).send();
     } else {
@@ -98,18 +99,18 @@ app.delete("/images/cars/:filename", (req, res) => {
   }
 });
 
-app.listen(process.env.MEDIA_PORT, () => {
+app.listen(env.MEDIA_PORT, () => {
   loggerMedia.info(
-    `Started media server on port ${process.env.MEDIA_PORT} (${
-      process.env.NODE_ENV === "production" ? "production" : "development"
+    `Started media server on port ${env.MEDIA_PORT} (${
+      env.NODE_ENV === "production" ? "production" : "development"
     })`
   );
 });
 
-if (process.env.CRON_PING_URL && process.env.CRON_INTERVAL_MS) {
-  fetch(`${process.env.CRON_PING_URL}/ridehailing-media`);
+if (env.CRON_PING_URL && env.CRON_INTERVAL_MS) {
+  fetch(`${env.CRON_PING_URL}/ridehailing-media`);
   setInterval(
-    () => fetch(`${process.env.CRON_PING_URL}/ridehailing-media`),
-    process.env.CRON_INTERVAL_MS
+    () => fetch(`${env.CRON_PING_URL}/ridehailing-media`),
+    env.CRON_INTERVAL_MS
   );
 }

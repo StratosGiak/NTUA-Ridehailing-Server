@@ -12,7 +12,7 @@ import {
 import sampleSize from "lodash.samplesize";
 import removeWhere from "lodash.remove";
 import findWhere from "lodash.find";
-import { loggerMain, loggerTraffic } from "../log/logger.js";
+import { loggerMain, loggerTraffic } from "./logger.js";
 import { isNSFW } from "./ml.js";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { cleanEnv, str, num } from "envalid";
