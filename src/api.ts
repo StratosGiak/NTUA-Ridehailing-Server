@@ -1,12 +1,9 @@
 import { WebSocket, WebSocketServer } from "ws";
 import { IncomingMessage, createServer } from "http";
 import {
-  getAllUsers,
   getUser,
-  getCar,
   createUser,
   createCar,
-  removeUser,
   removeUserCar,
   updateUserCar,
   updateUserPicture,
@@ -63,7 +60,7 @@ var passengerMap: { [id: string]: Passenger } = {};
 var sockets: { [id: string]: WebSocket } = {};
 var pendingRatings: { [id: string]: string[] } = {};
 
-function msgToJSON(type: string, data: any) {
+function msgToJSON(type: string, data: any): string {
   return JSON.stringify({ type: type, data: data });
 }
 
@@ -73,14 +70,14 @@ function notifyBadRequest(
   id: string,
   decoded: any,
   type: string
-) {
+): void {
   loggerMain.warn(
     `Bad request from ${uuid} (${id}): ${JSON.stringify(decoded, null, 2)}`
   );
   ws.send(msgToJSON(typeOfMessage.badRequest, type));
 }
 
-function stopDriver(id: string) {
+function stopDriver(id: string): void {
   if (!driverMap[id]) return;
   driverMap[id].passengers.forEach((passenger) => {
     if (passengerMap[passenger]) {
@@ -93,7 +90,7 @@ function stopDriver(id: string) {
   delete driverMap[id];
 }
 
-function stopPassenger(id: string, deletePassenger?: boolean) {
+function stopPassenger(id: string, deletePassenger?: boolean): void {
   if (
     !passengerMap[id] ||
     !passengerMap[id].driver_id ||
@@ -114,7 +111,7 @@ function stopPassenger(id: string, deletePassenger?: boolean) {
   if (deletePassenger == undefined || deletePassenger) delete passengerMap[id];
 }
 
-function deletePicture(pictureURL: string) {
+function deletePicture(pictureURL: string): void {
   fetch(`http://${env.MEDIA_HOST}:${env.MEDIA_PORT}/images/${pictureURL}`, {
     method: "DELETE",
   })
@@ -130,7 +127,9 @@ function deletePicture(pictureURL: string) {
     });
 }
 
-async function authenticate(req: IncomingMessage) {
+async function authenticate(
+  req: IncomingMessage
+): Promise<Credentials | undefined> {
   let idToken = req.headers["sec-websocket-protocol"];
   loggerTraffic.info(
     "Connection attempted with token: " + JSON.stringify(idToken, null, 2)
@@ -152,7 +151,7 @@ async function authenticate(req: IncomingMessage) {
   }
   return {
     id: (decodedToken.email as string).split("@")[0],
-    name: decodedToken.name as string,
+    full_name: decodedToken.name as string,
     given_name: decodedToken.given_name as string,
   };
 }
@@ -187,7 +186,7 @@ server.on("upgrade", async (req, socket, head) => {
 });
 
 wss.on("connection", async (ws: WebSocket, credentials: Credentials) => {
-  if (!credentials || !credentials.id || !credentials.name) {
+  if (!credentials || !credentials.id || !credentials.full_name) {
     ws.close(4002, "faulty credentials");
     return;
   }
@@ -203,8 +202,15 @@ wss.on("connection", async (ws: WebSocket, credentials: Credentials) => {
   if (!user) {
     loggerMain.info(`ID ${credentials.id} not found. Creating new user...`);
     user = await createUser(credentials.id);
+    if (!user) {
+      loggerMain.warn(
+        `Cannot create new user ${credentials.id}. Disconnecting...`
+      );
+      ws.close(4002, "cannot create user");
+      return;
+    }
   }
-  user.name = credentials.name;
+  user.full_name = credentials.full_name;
   user.given_name = credentials.given_name;
   ws.send(msgToJSON(typeOfMessage.login, user));
   sockets[user.id] = ws;
@@ -241,12 +247,7 @@ wss.on("connection", async (ws: WebSocket, credentials: Credentials) => {
           break;
         }
         driverMap[user.id] = {
-          id: user.id,
-          name: user.name,
-          given_name: user.given_name,
-          picture: user.picture,
-          ratings_count: user.ratings_count,
-          ratings_sum: user.ratings_sum,
+          ...user,
           coords: data.coords,
           car: data.car,
           passengers: [],
@@ -257,7 +258,7 @@ wss.on("connection", async (ws: WebSocket, credentials: Credentials) => {
           `New driver: ${JSON.stringify(
             {
               id: driverMap[user.id].id,
-              name: driverMap[user.id].name,
+              full_name: driverMap[user.id].full_name,
               car: driverMap[user.id].car,
               coords: driverMap[user.id].coords,
             },
@@ -279,20 +280,16 @@ wss.on("connection", async (ws: WebSocket, credentials: Credentials) => {
         }
         stopDriver(user.id);
         passengerMap[user.id] = {
-          id: user.id,
-          name: user.name,
-          given_name: user.given_name,
-          picture: user.picture,
-          ratings_count: user.ratings_count,
-          ratings_sum: user.ratings_sum,
+          ...user,
           coords: data.coords,
+          cars: {},
         };
         delete driverMap[user.id];
         loggerMain.info(
           `New passenger: ${JSON.stringify(
             {
               id: user.id,
-              name: user.name,
+              full_name: user.full_name,
               coords: passengerMap[user.id].coords,
             },
             null,
@@ -325,7 +322,7 @@ wss.on("connection", async (ws: WebSocket, credentials: Credentials) => {
           `Driver update: ${JSON.stringify(
             {
               id: user.id,
-              name: user.name,
+              full_name: user.full_name,
               coords: driverMap[user.id].coords,
             },
             null,
@@ -360,7 +357,7 @@ wss.on("connection", async (ws: WebSocket, credentials: Credentials) => {
           `Passenger update: ${JSON.stringify(
             {
               id: user.id,
-              name: user.name,
+              full_name: user.full_name,
               coords: passengerMap[user.id].coords,
             },
             null,
@@ -485,6 +482,12 @@ wss.on("connection", async (ws: WebSocket, credentials: Credentials) => {
           }
           if (data.ratings[i] == 0) continue;
           const targetUser = await getUser(data.ids[i]);
+          if (!targetUser) {
+            loggerMain.warn(
+              `User ${user.id} tried to rate user ${data.ids[i]} but failed`
+            );
+            continue;
+          }
           updateUserRating(
             targetUser.id,
             targetUser.ratings_sum + data.ratings[i],
@@ -501,18 +504,21 @@ wss.on("connection", async (ws: WebSocket, credentials: Credentials) => {
           break;
         }
         const car = await createCar(user.id, data);
-        user.cars[car.car_id] = car;
+        if (!car) {
+          return;
+        }
+        user.cars[car.id] = car;
         ws.send(msgToJSON(typeOfMessage.addCar, car));
         loggerMain.info(
           `Added car to user ${user.id}: ${JSON.stringify(
-            user.cars[car.car_id],
+            user.cars[car.id],
             null,
             2
           )}`
         );
         if (car.picture) {
           let picture = car.picture;
-          let car_id = car.car_id;
+          let car_id = car.id;
           isNSFW(`public/images/cars/${picture}`).then((isNSFW) => {
             if (!isNSFW) return;
             loggerMain.warn(`NSFW image detected at images/cars/${picture}}`);
@@ -548,17 +554,23 @@ wss.on("connection", async (ws: WebSocket, credentials: Credentials) => {
         }
         const oldPicture = user.cars[data.car_id].picture;
         const newCar = await updateUserCar(user.id, data);
+        if (!newCar) {
+          loggerMain.warn(
+            `Failed to update car ${JSON.stringify(data, null, 2)}`
+          );
+          return;
+        }
         if (oldPicture && data.picture != oldPicture) {
           deletePicture("cars/" + oldPicture);
         }
-        user.cars[newCar.car_id] = newCar;
+        user.cars[newCar.id] = newCar;
         ws.send(msgToJSON(typeOfMessage.addCar, newCar));
         loggerMain.info(
           `Updated car of ${user.id} to: ${JSON.stringify(newCar, null, 2)}`
         );
         if (newCar.picture && newCar.picture != oldPicture) {
           let picture = newCar.picture;
-          let car_id = newCar.car_id;
+          let car_id = newCar.id;
           isNSFW(`public/images/cars/${picture}`).then((isNSFW) => {
             if (!isNSFW) return;
             loggerMain.warn(`NSFW image detected at images/cars/${picture}}`);
@@ -586,11 +598,22 @@ wss.on("connection", async (ws: WebSocket, credentials: Credentials) => {
           );
           break;
         }
-        let newPicture = (await updateUserPicture(user.id, data)).picture;
-        if (!newPicture) break;
+        let newUser = await updateUserPicture(user.id, data);
+        if (!newUser) {
+          loggerMain.warn(
+            `Failed to update user ${user.id} picture ${JSON.stringify(
+              data,
+              null,
+              2
+            )}`
+          );
+          return;
+        }
+        let newPicture = newUser.picture;
         loggerMain.info(
           `Updated picture of ${user.id} from ${user.picture} to ${newPicture}`
         );
+        if (!newPicture) break;
         if (user.picture) {
           deletePicture("users/" + user.picture);
         }

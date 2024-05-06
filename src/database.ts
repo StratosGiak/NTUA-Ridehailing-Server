@@ -1,4 +1,5 @@
-import mysql from "mysql2";
+import mysql, { OkPacket, ResultSetHeader, RowDataPacket } from "mysql2";
+import { Car, User } from "./types/types.js";
 
 const pool = mysql
   .createPool({
@@ -34,34 +35,36 @@ CREATE TABLE IF NOT EXISTS \`cars\` (
 ) ENGINE=InnoDB AUTO_INCREMENT=91 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 `);
 
-export async function getAllUsers() {
-  const [users] = await pool.execute("SELECT * FROM users");
-  const [cars] = await pool.execute("SELECT * FROM cars");
-  const result = users.map(function (user, _) {
+export async function getAllUsers(): Promise<{ [id: string]: User }> {
+  const [users] = await pool.execute<User[]>("SELECT * FROM users");
+  const [cars] = await pool.execute<Car[]>("SELECT * FROM cars");
+  const result = users.map((user, _) => {
     user.cars = cars
       .filter((car) => car.user_id == user.id)
-      .reduce(function (map, car) {
+      .reduce<{ [id: string]: Car }>((map, car) => {
         map[car.car_id] = car;
         delete car.user_id;
         return map;
       }, {});
     return user;
   });
-  return result.reduce(function (map, obj) {
-    map[obj.id] = obj;
+  return result.reduce<{ [id: string]: User }>((map, user) => {
+    map[user.id] = user;
     return map;
   }, {});
 }
 
-export async function getUser(user_id) {
-  const [user] = await pool.execute(`SELECT * FROM users WHERE id = ?`, [
-    user_id,
-  ]);
+export async function getUser(user_id: string): Promise<User | undefined> {
+  const [user] = await pool.execute<User[]>(
+    `SELECT * FROM users WHERE id = ?`,
+    [user_id]
+  );
   if (!user[0]) return;
-  const [cars] = await pool.execute(`SELECT * FROM cars WHERE user_id = ?`, [
-    user_id,
-  ]);
-  user[0].cars = cars.reduce((map, car) => {
+  const [cars] = await pool.execute<Car[]>(
+    `SELECT * FROM cars WHERE user_id = ?`,
+    [user_id]
+  );
+  user[0].cars = cars.reduce<{ [id: string]: Car }>((map, car) => {
     delete car.user_id;
     map[car.car_id] = car;
     return map;
@@ -69,14 +72,15 @@ export async function getUser(user_id) {
   return user[0];
 }
 
-export async function getCar(car_id) {
-  const [car] = await pool.execute(`SELECT * FROM cars WHERE car_id = ?`, [
-    car_id,
-  ]);
+export async function getCar(car_id: number): Promise<Car | undefined> {
+  const [car] = await pool.execute<Car[]>(
+    `SELECT * FROM cars WHERE car_id = ?`,
+    [car_id]
+  );
   return car[0];
 }
 
-export async function createUser(user_id) {
+export async function createUser(user_id: string): Promise<User | undefined> {
   const [result, fields] = await pool.execute(
     `INSERT INTO users (id) VALUES (?)`,
     [user_id]
@@ -84,15 +88,21 @@ export async function createUser(user_id) {
   return getUser(user_id);
 }
 
-export async function createCar(user_id, car) {
-  const [result, fields] = await pool.execute(
+export async function createCar(
+  user_id: string,
+  car: Car
+): Promise<Car | undefined> {
+  const [result, fields] = await pool.execute<ResultSetHeader>(
     `INSERT INTO cars (user_id, model, seats, license, picture, color) VALUES (?, ?, ?, ?, ?, ?)`,
     [user_id, car.model, car.seats, car.license, car.picture, car.color]
   );
   return getCar(result.insertId);
 }
 
-export async function updateUserPicture(user_id, picture) {
+export async function updateUserPicture(
+  user_id: string,
+  picture: string | null
+): Promise<User | undefined> {
   const [result] = await pool.execute(
     `UPDATE users SET picture = ? WHERE (id = ?)`,
     [picture, user_id]
@@ -100,37 +110,39 @@ export async function updateUserPicture(user_id, picture) {
   return getUser(user_id);
 }
 
-export async function updateUserRating(user_id, ratings_sum, ratings_count) {
+export async function updateUserRating(
+  user_id: string,
+  ratings_sum: number,
+  ratings_count: number
+): Promise<void> {
   const [result] = await pool.execute(
     `UPDATE users SET ratings_sum = ?, ratings_count = ? WHERE (id = ?)`,
     [ratings_sum, ratings_count, user_id]
   );
 }
 
-export async function updateUserCar(user_id, car) {
+export async function updateUserCar(
+  user_id: string,
+  car: Car
+): Promise<Car | undefined> {
   const [result] = await pool.execute(
     `UPDATE cars SET model = ?, seats = ?, license = ?, picture = ?, color = ? WHERE (user_id = ?) & (car_id = ?)`,
-    [
-      car.model,
-      car.seats,
-      car.license,
-      car.picture,
-      car.color,
-      user_id,
-      car.car_id,
-    ]
+    [car.model, car.seats, car.license, car.picture, car.color, user_id, car.id]
   );
-  return getCar(car.car_id);
+  return getCar(car.id);
 }
 
-export async function removeUserCar(user_id, car_id) {
+export async function removeUserCar(
+  user_id: string,
+  car_id: number
+): Promise<void> {
   const [result, fields] = await pool.execute(
     `DELETE FROM cars WHERE (user_id = ?) & (car_id = ?)`,
     [user_id, car_id]
   );
 }
 
-export async function removeUser(user_id) {
+export async function removeUser(user_id: string): Promise<void> {
   await pool.execute(`DELETE FROM users WHERE id = ?`, [user_id]);
   await pool.execute(`DELETE FROM cars WHERE user_id = ?`, [user_id]);
 }
