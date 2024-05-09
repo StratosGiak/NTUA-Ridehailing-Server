@@ -10,7 +10,7 @@ export const loggerMain = createLogger({
     new transports.Console({ silent: process.env.NODE_ENV === "production" }),
     new transports.DailyRotateFile({
       level: "info",
-      filename: "./log/logs/api.%DATE%.log",
+      filename: "./logs/api.%DATE%.log",
       datePattern: "YYYY-w",
       zippedArchive: true,
     }),
@@ -27,7 +27,7 @@ export const loggerTraffic = createLogger({
     new transports.Console({ silent: process.env.NODE_ENV === "production" }),
     new transports.DailyRotateFile({
       level: "info",
-      filename: "./log/logs/traffic.%DATE%.log",
+      filename: "./logs/traffic.%DATE%.log",
       datePattern: "YYYY-w",
       zippedArchive: true,
     }),
@@ -44,7 +44,7 @@ export const loggerMedia = createLogger({
     new transports.Console({ silent: process.env.NODE_ENV === "production" }),
     new transports.DailyRotateFile({
       level: "info",
-      filename: "./log/logs/media.%DATE%.log",
+      filename: "./logs/media.%DATE%.log",
       datePattern: "YYYY-w",
       zippedArchive: true,
     }),

@@ -15,11 +15,13 @@ fi
 
 export NODE_ENV=$mode
 
+npx tsc
+
 echo "Starting server in $mode mode..."
 
 envpath="./src/config/.env"
 
-parallel --lb ::: "node --env-file=${envpath} --env-file=${envpath}.${mode} src/api.js" "node --env-file=${envpath} --env-file=${envpath}.${mode} src/media.js" & pid=$!
+parallel --lb ::: "node --env-file=${envpath} --env-file=${envpath}.${mode} built/api.js" "node --env-file=${envpath} --env-file=${envpath}.${mode} built/media.js" & pid=$!
 
 wait $pid
 

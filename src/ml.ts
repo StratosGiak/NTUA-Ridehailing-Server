@@ -10,6 +10,7 @@ import {
   Tensor,
 } from "@tensorflow/tfjs-node";
 import { TFSavedModel } from "@tensorflow/tfjs-node/dist/saved_model.js";
+import { loggerMain } from "./logger.js";
 //enableProdMode();
 
 const modelNSFW = await tfnode.loadSavedModel("./tflite_models/nsfw_detection");
@@ -39,10 +40,9 @@ async function classifyImageFile(
 export async function isNSFW(path: string) {
   return classifyImageFile(modelNSFW, path, false)
     .then((values) => {
-      console.log(values);
       return values[0] + values[2] < 0.1;
     })
     .catch((error) => {
-      console.log(error);
+      loggerMain.warn(error);
     });
 }

@@ -22,14 +22,14 @@ CREATE TABLE IF NOT EXISTS \`users\` (
 
 await pool.execute(`
 CREATE TABLE IF NOT EXISTS \`cars\` (
-  \`car_id\` int NOT NULL AUTO_INCREMENT,
+  \`id\` int NOT NULL AUTO_INCREMENT,
   \`user_id\` varchar(45) NOT NULL,
   \`model\` varchar(45) NOT NULL,
   \`seats\` int NOT NULL,
   \`license\` varchar(45) NOT NULL,
   \`picture\` varchar(45) DEFAULT NULL,
   \`color\` int unsigned DEFAULT NULL,
-  PRIMARY KEY (\`car_id\`),
+  PRIMARY KEY (\`id\`),
   KEY \`user_id_idx\` (\`user_id\`),
   CONSTRAINT \`user_id\` FOREIGN KEY (\`user_id\`) REFERENCES \`users\` (\`id\`) ON UPDATE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=91 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
@@ -42,7 +42,7 @@ export async function getAllUsers(): Promise<{ [id: string]: User }> {
     user.cars = cars
       .filter((car) => car.user_id == user.id)
       .reduce<{ [id: string]: Car }>((map, car) => {
-        map[car.car_id] = car;
+        map[car.id] = car;
         delete car.user_id;
         return map;
       }, {});
@@ -66,17 +66,16 @@ export async function getUser(user_id: string): Promise<User | undefined> {
   );
   user[0].cars = cars.reduce<{ [id: string]: Car }>((map, car) => {
     delete car.user_id;
-    map[car.car_id] = car;
+    map[car.id] = car;
     return map;
   }, {});
   return user[0];
 }
 
-export async function getCar(car_id: number): Promise<Car | undefined> {
-  const [car] = await pool.execute<Car[]>(
-    `SELECT * FROM cars WHERE car_id = ?`,
-    [car_id]
-  );
+export async function getCar(id: number): Promise<Car | undefined> {
+  const [car] = await pool.execute<Car[]>(`SELECT * FROM cars WHERE id = ?`, [
+    id,
+  ]);
   return car[0];
 }
 
@@ -126,7 +125,7 @@ export async function updateUserCar(
   car: Car
 ): Promise<Car | undefined> {
   const [result] = await pool.execute(
-    `UPDATE cars SET model = ?, seats = ?, license = ?, picture = ?, color = ? WHERE (user_id = ?) & (car_id = ?)`,
+    `UPDATE cars SET model = ?, seats = ?, license = ?, picture = ?, color = ? WHERE (user_id = ?) & (id = ?)`,
     [car.model, car.seats, car.license, car.picture, car.color, user_id, car.id]
   );
   return getCar(car.id);
@@ -137,7 +136,7 @@ export async function removeUserCar(
   car_id: number
 ): Promise<void> {
   const [result, fields] = await pool.execute(
-    `DELETE FROM cars WHERE (user_id = ?) & (car_id = ?)`,
+    `DELETE FROM cars WHERE (user_id = ?) & (id = ?)`,
     [user_id, car_id]
   );
 }
