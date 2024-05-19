@@ -110,7 +110,10 @@ app.listen(env.MEDIA_PORT, () => {
 if (env.CRON_PING_URL && env.CRON_INTERVAL_MS) {
   fetch(`${env.CRON_PING_URL}/ridehailing-media`);
   setInterval(
-    () => fetch(`${env.CRON_PING_URL}/ridehailing-media`),
+    () =>
+      fetch(`${env.CRON_PING_URL}/ridehailing-media`).catch((error) =>
+        loggerMedia.error("Failed to connect to heartbeat server." + error)
+      ),
     env.CRON_INTERVAL_MS
   );
 }

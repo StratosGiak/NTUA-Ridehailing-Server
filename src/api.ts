@@ -730,7 +730,10 @@ server.listen(env.API_PORT, () => {
 if (env.CRON_PING_URL && env.CRON_INTERVAL_MS) {
   fetch(`${env.CRON_PING_URL}/ridehailing-api`);
   setInterval(
-    () => fetch(`${env.CRON_PING_URL}/ridehailing-api`),
+    () =>
+      fetch(`${env.CRON_PING_URL}/ridehailing-api`).catch((error) =>
+        loggerMain.error("Failed to connect to heartbeat server." + error)
+      ),
     env.CRON_INTERVAL_MS
   );
 }
