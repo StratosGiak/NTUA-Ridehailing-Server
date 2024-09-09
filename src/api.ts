@@ -55,10 +55,10 @@ const typeOfMessage = {
   signout: "!SIGNOUT",
 } as const;
 
-var driverMap: { [id: string]: Driver } = {};
-var passengerMap: { [id: string]: Passenger } = {};
-var sockets: { [id: string]: WebSocket } = {};
-var pendingRatings: { [id: string]: string[] } = {};
+let driverArray: { [id: string]: Driver } = {};
+let passengerArray: { [id: string]: Passenger } = {};
+let socketArray: { [id: string]: WebSocket } = {};
+let pendingRatings: { [id: string]: string[] } = {};
 
 function msgToJSON(type: string, data: any) {
   return JSON.stringify({ type: type, data: data });
@@ -76,38 +76,43 @@ function notifyBadRequest(
   ws.send(msgToJSON(typeOfMessage.badRequest, type));
 }
 
-function stopDriver(id: string) {
-  if (!driverMap[id]) return;
-  driverMap[id].passengers.forEach((passenger) => {
-    if (passengerMap[passenger]) {
-      delete passengerMap[passenger].driver_id;
+function stopDriver(id: string, deleteDriver: boolean = true) {
+  if (!driverArray[id]) return;
+  driverArray[id].passengers.forEach((passenger) => {
+    if (passengerArray[passenger]) {
+      delete passengerArray[passenger].driver_id;
     }
-    if (sockets[passenger]) {
-      sockets[passenger].send(msgToJSON(typeOfMessage.getDriver, null));
+    if (socketArray[passenger]) {
+      socketArray[passenger].send(msgToJSON(typeOfMessage.updateDriver, null));
     }
   });
-  delete driverMap[id];
+  if (deleteDriver) delete driverArray[id];
 }
 
-function stopPassenger(id: string, deletePassenger?: boolean) {
+function stopPassenger(id: string, deletePassenger: boolean = true) {
+  if (!passengerArray[id]) return;
   if (
-    !passengerMap[id] ||
-    !passengerMap[id].driver_id ||
-    !driverMap[passengerMap[id].driver_id!]
-  )
-    return;
-  if (sockets[passengerMap[id].driver_id!]) {
-    sockets[passengerMap[id].driver_id!].send(
-      msgToJSON(typeOfMessage.updatePassenger, {
-        cancelled: id,
-      })
+    passengerArray[id].driver_id &&
+    driverArray[passengerArray[id].driver_id!]
+  ) {
+    if (socketArray[passengerArray[id].driver_id!]) {
+      socketArray[passengerArray[id].driver_id!].send(
+        msgToJSON(typeOfMessage.updatePassenger, {
+          cancelled: id,
+        })
+      );
+    }
+    remove(
+      driverArray[passengerArray[id].driver_id!].passengers,
+      (passenger) => passenger == id
+    );
+    remove(
+      driverArray[passengerArray[id].driver_id!].candidates,
+      (passenger) => passenger == id
     );
   }
-  removeWhere(
-    driverMap[passengerMap[id].driver_id!].passengers,
-    (passenger) => passenger == id
-  );
-  if (deletePassenger == undefined || deletePassenger) delete passengerMap[id];
+  if (deletePassenger) delete passengerArray[id];
+}
 }
 
 function deletePicture(pictureURL: string) {
@@ -187,7 +192,7 @@ wss.on(
       ws.close(4002, "faulty credentials");
       return;
     }
-    if (sockets[credentials.id]) {
+    if (socketArray[credentials.id]) {
       loggerMain.warn(
         `Client ${credentials.id} tried to connect while already connected`
       );
@@ -209,7 +214,7 @@ wss.on(
     user.full_name = credentials.full_name;
     user.given_name = credentials.given_name;
     ws.send(msgToJSON(typeOfMessage.login, user));
-    sockets[user.id] = ws;
+    socketArray[user.id] = ws;
     loggerMain.info(`Client logged in: ${JSON.stringify(user, null, 2)}`);
 
     ws.on("error", (error) => {
@@ -219,7 +224,7 @@ wss.on(
     ws.on("close", () => {
       stopDriver(user.id);
       stopPassenger(user.id);
-      delete sockets[user.id];
+      delete socketArray[user.id];
       loggerMain.info(`Disconnected client ${user.id}`);
     });
 
@@ -252,7 +257,7 @@ wss.on(
             );
             break;
           }
-          driverMap[user.id] = {
+          driverArray[user.id] = {
             ...user,
             coords: data.coords,
             car: data.car,
@@ -263,10 +268,10 @@ wss.on(
           loggerMain.info(
             `New driver: ${JSON.stringify(
               {
-                id: driverMap[user.id].id,
-                full_name: driverMap[user.id].full_name,
-                car: driverMap[user.id].car,
-                coords: driverMap[user.id].coords,
+                id: driverArray[user.id].id,
+                full_name: driverArray[user.id].full_name,
+                car: driverArray[user.id].car,
+                coords: driverArray[user.id].coords,
               },
               null,
               2
@@ -286,7 +291,7 @@ wss.on(
             break;
           }
           stopDriver(user.id);
-          passengerMap[user.id] = {
+          passengerArray[user.id] = {
             ...user,
             coords: data.coords,
             cars: {},
@@ -297,7 +302,7 @@ wss.on(
               {
                 id: user.id,
                 full_name: user.full_name,
-                coords: passengerMap[user.id].coords,
+                coords: passengerArray[user.id].coords,
               },
               null,
               2
@@ -306,32 +311,22 @@ wss.on(
           break;
         }
         case typeOfMessage.updateDriver: {
-          if (!driverMap[user.id]) break;
-          if (!data.coords) {
-            notifyBadRequest(
-              ws,
+          if (!driverArray[user.id]) break;
 
-              user.id,
-              decoded,
-              typeOfMessage.updateDriver
+          driverArray[user.id].picture = user.picture;
+          driverArray[user.id].coords = data.coords;
+          driverArray[user.id].passengers.forEach((passenger) => {
+            if (!socketArray[passenger]) return;
+            socketArray[passenger].send(
+              msgToJSON(typeOfMessage.getDriver, driverArray[user.id])
             );
-            break;
-          }
-          driverMap[user.id].picture = user.picture;
-          driverMap[user.id].coords = data.coords;
-          driverMap[user.id].passengers.forEach((passenger) => {
-            if (sockets[passenger]) {
-              sockets[passenger].send(
-                msgToJSON(typeOfMessage.getDriver, driverMap[user.id])
-              );
-            }
           });
           loggerMain.info(
             `Driver update: ${JSON.stringify(
               {
                 id: user.id,
                 full_name: user.full_name,
-                coords: driverMap[user.id].coords,
+                coords: driverArray[user.id].coords,
               },
               null,
               2
@@ -340,7 +335,7 @@ wss.on(
           break;
         }
         case typeOfMessage.updatePassenger: {
-          if (!passengerMap[user.id]) break;
+          if (!passengerArray[user.id]) break;
           if (!data.coords) {
             notifyBadRequest(
               ws,
@@ -351,15 +346,18 @@ wss.on(
             );
             break;
           }
-          passengerMap[user.id].picture = user.picture;
-          passengerMap[user.id].coords = data.coords;
+          passengerArray[user.id].picture = user.picture;
+          passengerArray[user.id].coords = data.coords;
           if (
-            passengerMap[user.id].driver_id &&
-            driverMap[passengerMap[user.id].driver_id!] &&
-            sockets[passengerMap[user.id].driver_id!]
+            passengerArray[user.id].driver_id &&
+            driverArray[passengerArray[user.id].driver_id!] &&
+            driverArray[passengerArray[user.id].driver_id!].passengers.find(
+              (passenger) => passenger == user.id
+            ) &&
+            socketArray[passengerArray[user.id].driver_id!]
           ) {
-            sockets[passengerMap[user.id].driver_id!].send(
-              msgToJSON(typeOfMessage.updatePassenger, passengerMap[user.id])
+            socketArray[passengerArray[user.id].driver_id!].send(
+              msgToJSON(typeOfMessage.updatePassenger, passengerArray[user.id])
             );
           }
           loggerMain.info(
@@ -367,7 +365,7 @@ wss.on(
               {
                 id: user.id,
                 full_name: user.full_name,
-                coords: passengerMap[user.id].coords,
+                coords: passengerArray[user.id].coords,
               },
               null,
               2
@@ -376,56 +374,48 @@ wss.on(
           break;
         }
         case typeOfMessage.pingPassengers: {
-          if (!driverMap[user.id]) break;
-          const passengerIDArray = Object.keys(passengerMap).filter(
-            (id) => !passengerMap[id].driver_id
+          if (!driverArray[user.id]) break;
+          const passengerIDArray = Object.keys(passengerArray).filter(
+            (id) => !passengerArray[id].driver_id
           );
-          const randomPassengers = sampleSize(
+          driverArray[user.id].candidates = sampleSize(
             passengerIDArray,
-            Math.min(driverMap[user.id].car.seats + 2, 5)
+            Math.min(driverArray[user.id].car.seats + 2, 5)
           );
-          randomPassengers.forEach((id) => {
-            passengerMap[id].driver_id = user.id;
-            if (sockets[id]) {
-              sockets[id].send(
-                msgToJSON(typeOfMessage.pingPassengers, user.id)
-              );
-            }
+          driverArray[user.id].forEach((id) => {
+            passengerArray[id].driver_id = user.id;
+            if (!socketArray[id]) return;
+            socketArray[id].send(
+              msgToJSON(typeOfMessage.pingPassengers, user.id)
+            );
           });
           break;
         }
         case typeOfMessage.pingDriver: {
-          if (!passengerMap[user.id] || !passengerMap[user.id].driver_id) break;
-          if (data == undefined) {
-            notifyBadRequest(
-              ws,
-
-              user.id,
-              decoded,
-              typeOfMessage.pingDriver
-            );
+          if (!passengerArray[user.id] || !passengerArray[user.id].driver_id)
             break;
-          }
-          const driver_id = passengerMap[user.id].driver_id;
+
+          const driver_id = passengerArray[user.id].driver_id!;
           if (!data) {
-            delete passengerMap[user.id].driver_id;
+            delete passengerArray[user.id].driver_id;
             loggerMain.info(`Passenger ${user.id} refused driver ${driver_id}`);
             break;
           }
           if (
-            !driverMap[driver_id!] ||
-            driverMap[driver_id!].passengers.length >=
-              driverMap[driver_id!].car.seats
+            driverArray[driver_id].passengers.length >=
+            driverArray[driver_id].car.seats
           ) {
             ws.send(msgToJSON(typeOfMessage.pingDriver, null));
-            delete passengerMap[user.id].driver_id;
+            delete passengerArray[user.id].driver_id;
             break;
           }
-          driverMap[driver_id!].passengers.push(user.id);
-          ws.send(msgToJSON(typeOfMessage.pingDriver, driverMap[driver_id!]));
-          sockets[driver_id!].send(
-            msgToJSON(typeOfMessage.updatePassenger, passengerMap[user.id])
-          );
+          driverArray[driver_id].passengers.push(user.id);
+          ws.send(msgToJSON(typeOfMessage.pingDriver, driverArray[driver_id]));
+          if (socketArray[driver_id]) {
+            socketArray[driver_id].send(
+              msgToJSON(typeOfMessage.updatePassenger, passengerArray[user.id])
+            );
+          }
           break;
         }
         case typeOfMessage.stopDriver: {
@@ -442,24 +432,25 @@ wss.on(
           stopPassenger(user.id, false);
           loggerMain.info(
             `Passenger ${user.id} moved out of range of ${
-              passengerMap[user.id].driver_id
+              passengerArray[user.id].driver_id
             }`
           );
-          delete passengerMap[user.id].driver_id;
+          delete passengerArray[user.id].driver_id;
           break;
         }
         case typeOfMessage.arrivedDestination: {
-          if (!driverMap[user.id]) break;
-          driverMap[user.id].passengers.forEach((passenger) => {
-            sockets[passenger].send(
+          if (!driverArray[user.id]) break;
+          driverArray[user.id].passengers.forEach((passenger) => {
+            if (!socketArray[passenger]) return;
+            socketArray[passenger].send(
               msgToJSON(typeOfMessage.arrivedDestination, null)
             );
             pendingRatings[passenger] = [user.id];
           });
-          pendingRatings[user.id] = driverMap[user.id].passengers;
+          pendingRatings[user.id] = driverArray[user.id].passengers;
           loggerMain.info(
             `Driver ${user.id} arrived at destination with passengers ${
-              driverMap[user.id].passengers
+              driverArray[user.id].passengers
             }`
           );
           break;
@@ -546,14 +537,14 @@ wss.on(
                 return;
               user.cars[car_id].picture = null;
               if (
-                driverMap[user.id] &&
-                driverMap[user.id].car.picture == picture
+                driverArray[user.id] &&
+                driverArray[user.id].car.picture == picture
               ) {
-                driverMap[user.id].car.picture = null;
+                driverArray[user.id].car.picture = null;
               }
               updateUserCar(user.id, user.cars[car_id]);
-              if (sockets[user.id]) {
-                sockets[user.id].send(
+              if (socketArray[user.id]) {
+                socketArray[user.id].send(
                   msgToJSON(typeOfMessage.deleteCarPicture, car_id)
                 );
               }
@@ -605,8 +596,8 @@ wss.on(
                 return;
               user.cars[car_id].picture = null;
               updateUserCar(user.id, user.cars[car_id]);
-              if (sockets[user.id]) {
-                sockets[user.id].send(
+              if (socketArray[user.id]) {
+                socketArray[user.id].send(
                   msgToJSON(typeOfMessage.deleteCarPicture, car_id)
                 );
               }
@@ -655,8 +646,8 @@ wss.on(
             if (user.picture != newPicture) return;
             user.picture = null;
             updateUserPicture(user.id, null);
-            if (sockets[user.id]) {
-              sockets[user.id].send(
+            if (socketArray[user.id]) {
+              socketArray[user.id].send(
                 msgToJSON(typeOfMessage.deleteUserPicture, null)
               );
             }
@@ -699,7 +690,7 @@ wss.on(
           break;
         }
         case typeOfMessage.getPassengers: {
-          if (findWhere(passengerMap, (passenger) => !passenger.driver_id)) {
+          if (findWhere(passengerArray, (passenger) => !passenger.driver_id)) {
             ws.send(msgToJSON(typeOfMessage.getPassengers, null));
           }
           break;
@@ -707,7 +698,7 @@ wss.on(
         case typeOfMessage.signout: {
           stopDriver(user.id);
           stopPassenger(user.id);
-          delete sockets[user.id];
+          delete socketArray[user.id];
           loggerMain.info(`Signed out ${user.id}`);
           ws.close(1000, "user requested signout");
           break;
