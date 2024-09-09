@@ -4,3 +4,5 @@ public
 !public/index.html
 node_modules
 built
+.venv
+__pycache__

@@ -12,7 +12,6 @@ import {
 import sampleSize from "lodash.samplesize";
 import remove from "lodash.remove";
 import { loggerMain, loggerTraffic } from "./logger.js";
-import { isNSFW } from "./ml.js";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { cleanEnv, str, num } from "envalid";
 import type { Car, Credentials, Driver, Passenger } from "./types/types.js";
@@ -20,7 +19,9 @@ import type { Car, Credentials, Driver, Passenger } from "./types/types.js";
 const env = cleanEnv(process.env, {
   API_PORT: str(),
   MEDIA_HOST: str(),
-  MEDIA_PORT: str(),
+  MEDIA_PORT: num(),
+  ML_HOST: str(),
+  ML_PORT: num(),
   JWKS: str(),
   CRON_PING_URL: str(),
   CRON_INTERVAL_MS: num(),
@@ -131,8 +132,17 @@ function stopPassenger(id: string, deletePassenger: boolean = true) {
   }
   if (deletePassenger) delete passengerArray[id];
 }
+
+async function isNSFW(path: string) {
+  const response = await fetch(
+    `https://ntua-ridehailing.dslab.ece.ntua.gr/ml/${path}`
+  );
+  return response.json() as Promise<boolean>;
 }
 
+async function deletePicture(pictureURL: string) {
+  try {
+    const response = await fetch(
 function deletePicture(pictureURL: string) {
   fetch(`http://${env.MEDIA_HOST}:${env.MEDIA_PORT}/images/${pictureURL}`, {
     method: "DELETE",
@@ -147,6 +157,18 @@ function deletePicture(pictureURL: string) {
     .catch((error) => {
       loggerMain.error(`Failed to connect to media server: ${error}`);
     });
+      {
+        method: "DELETE",
+      }
+    );
+    if (!response.ok) {
+      loggerMain.warn(`FAILED to delete image at ${pictureURL}`);
+    } else {
+      loggerMain.info(`Deleted image at ${pictureURL}`);
+    }
+  } catch (error) {
+    loggerMain.error(`Failed to connect to media server: ${error}`);
+  }
 }
 
 async function authenticate(req: IncomingMessage) {
@@ -536,26 +558,25 @@ wss.on(
           if (car.picture) {
             let picture = car.picture;
             let car_id = car.id;
-            isNSFW(`public/images/cars/${picture}`).then((isNSFW) => {
-              if (!isNSFW) return;
-              loggerMain.warn(`NSFW image detected at images/cars/${picture}}`);
-              deletePicture("cars/" + picture);
-              if (!user.cars[car_id] || user.cars[car_id].picture != picture)
-                return;
-              user.cars[car_id].picture = null;
-              if (
-                driverArray[user.id] &&
-                driverArray[user.id].car.picture == picture
-              ) {
-                driverArray[user.id].car.picture = null;
-              }
-              updateUserCar(user.id, user.cars[car_id]);
-              if (socketArray[user.id]) {
-                socketArray[user.id].send(
-                  msgToJSON(typeOfMessage.deleteCarPicture, car_id)
-                );
-              }
-            });
+            const resultNSFW = await isNSFW(`cars/${picture}`);
+            if (!resultNSFW) return;
+            loggerMain.warn(`NSFW image detected at cars/${picture}`);
+            deletePicture("cars/" + picture);
+            if (!user.cars[car_id] || user.cars[car_id].picture != picture)
+              return;
+            user.cars[car_id].picture = null;
+            if (
+              driverArray[user.id] &&
+              driverArray[user.id].car.picture == picture
+            ) {
+              driverArray[user.id].car.picture = null;
+            }
+            updateUserCar(user.id, user.cars[car_id]);
+            if (socketArray[user.id]) {
+              socketArray[user.id].send(
+                msgToJSON(typeOfMessage.deleteCarPicture, car_id)
+              );
+            }
           }
           break;
         }
@@ -589,20 +610,19 @@ wss.on(
           if (newCar.picture && newCar.picture != oldPicture) {
             let picture = newCar.picture;
             let car_id = newCar.id;
-            isNSFW(`public/images/cars/${picture}`).then((isNSFW) => {
-              if (!isNSFW) return;
-              loggerMain.warn(`NSFW image detected at images/cars/${picture}}`);
-              deletePicture("cars/" + picture);
-              if (!user.cars[car_id] || user.cars[car_id].picture != picture)
-                return;
-              user.cars[car_id].picture = null;
-              updateUserCar(user.id, user.cars[car_id]);
-              if (socketArray[user.id]) {
-                socketArray[user.id].send(
-                  msgToJSON(typeOfMessage.deleteCarPicture, car_id)
-                );
-              }
-            });
+            const resultNSFW = await isNSFW(`cars/${picture}`);
+            if (!resultNSFW) return;
+            loggerMain.warn(`NSFW image detected at cars/${picture}`);
+            deletePicture("cars/" + picture);
+            if (!user.cars[car_id] || user.cars[car_id].picture != picture)
+              return;
+            user.cars[car_id].picture = null;
+            updateUserCar(user.id, user.cars[car_id]);
+            if (socketArray[user.id]) {
+              socketArray[user.id].send(
+                msgToJSON(typeOfMessage.deleteCarPicture, car_id)
+              );
+            }
           }
           break;
         }
@@ -610,7 +630,6 @@ wss.on(
           if (!data || typeof data != "string") {
             notifyBadRequest(
               ws,
-
               user.id,
               decoded,
               typeOfMessage.updateUserPicture
@@ -638,21 +657,18 @@ wss.on(
           }
           user.picture = newPicture;
           ws.send(msgToJSON(typeOfMessage.updateUserPicture, newPicture));
-          isNSFW(`public/images/users/${newPicture}`).then((isNSFW) => {
-            if (!isNSFW) return;
-            loggerMain.warn(
-              `NSFW image detected at images/users/${newPicture}}`
+          const resultNSFW = await isNSFW(`users/${newPicture}`);
+          if (!resultNSFW) return;
+          loggerMain.warn(`NSFW image detected at users/${newPicture}`);
+          deletePicture("users/" + newPicture);
+          if (user.picture != newPicture) return;
+          user.picture = null;
+          updateUserPicture(user.id, null);
+          if (socketArray[user.id]) {
+            socketArray[user.id].send(
+              msgToJSON(typeOfMessage.deleteUserPicture, null)
             );
-            deletePicture("users/" + newPicture);
-            if (user.picture != newPicture) return;
-            user.picture = null;
-            updateUserPicture(user.id, null);
-            if (socketArray[user.id]) {
-              socketArray[user.id].send(
-                msgToJSON(typeOfMessage.deleteUserPicture, null)
-              );
-            }
-          });
+          }
           break;
         }
         case typeOfMessage.deleteUserPicture: {

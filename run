@@ -1,4 +1,5 @@
 #!/bin/bash
+cd $( dirname $0 )
 
 if [ $# -ne 1 ]; then
   echo "Usage $0 [-development | -production]"
@@ -14,14 +15,18 @@ else
 fi
 
 export NODE_ENV=$mode
+set -a
+source ./src/config/.env
+source ./src/config/.env.$mode
+set +a
+source ./.venv/bin/activate
+
 
 npx tsc
 
 echo "Starting server in $mode mode..."
 
-envpath="./src/config/.env"
-
-parallel --lb ::: "node --env-file=${envpath} --env-file=${envpath}.${mode} built/api.js" "node --env-file=${envpath} --env-file=${envpath}.${mode} built/media.js" & pid=$!
+parallel --lb ::: "python3 ./src/ml.py" "node built/api.js" "node built/media.js" & pid=$!
 
 wait $pid
 
