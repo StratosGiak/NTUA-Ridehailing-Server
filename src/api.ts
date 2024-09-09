@@ -286,6 +286,7 @@ wss.on(
             ...user,
             coords: data.coords,
             car: data.car,
+            candidates: [],
             passengers: [],
           };
           ws.send(msgToJSON(typeOfMessage.newDriver, null));
@@ -400,7 +401,7 @@ wss.on(
             passengerIDArray,
             Math.min(driverArray[user.id].car.seats + 2, 5)
           );
-          driverArray[user.id].forEach((id) => {
+          driverArray[user.id].candidates.forEach((id) => {
             passengerArray[id].driver_id = user.id;
             if (!socketArray[id]) return;
             socketArray[id].send(
@@ -412,7 +413,22 @@ wss.on(
         case typeOfMessage.pingDriver: {
           if (!passengerArray[user.id] || !passengerArray[user.id].driver_id)
             break;
-
+          if (
+            !driverArray[passengerArray[user.id].driver_id!] ||
+            !driverArray[passengerArray[user.id].driver_id!].candidates.find(
+              (passenger) => passenger == user.id
+            )
+          ) {
+            ws.send(msgToJSON(typeOfMessage.pingDriver, null));
+            delete passengerArray[user.id].driver_id;
+            break;
+          }
+          if (
+            driverArray[passengerArray[user.id].driver_id!].passengers.find(
+              (passenger) => passenger == user.id
+            )
+          )
+            break;
           const driver_id = passengerArray[user.id].driver_id!;
           if (!data) {
             delete passengerArray[user.id].driver_id;
@@ -428,6 +444,10 @@ wss.on(
             break;
           }
           driverArray[driver_id].passengers.push(user.id);
+          remove(
+            driverArray[driver_id].candidates,
+            (passenger) => passenger == user.id
+          );
           ws.send(msgToJSON(typeOfMessage.pingDriver, driverArray[driver_id]));
           if (socketArray[driver_id]) {
             socketArray[driver_id].send(
@@ -715,10 +735,11 @@ server.listen(env.API_PORT, () => {
 });
 
 if (env.CRON_PING_URL && env.CRON_INTERVAL_MS) {
-  fetch(`${env.CRON_PING_URL}/ridehailing-api`);
+  const url = `${env.CRON_PING_URL}/ridehailing-api`;
+  fetch(url);
   setInterval(
     () =>
-      fetch(`${env.CRON_PING_URL}/ridehailing-api`).catch((error) =>
+      fetch(url).catch((error) =>
         loggerMain.error("Failed to connect to heartbeat server." + error)
       ),
     env.CRON_INTERVAL_MS

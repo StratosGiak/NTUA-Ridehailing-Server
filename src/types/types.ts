@@ -12,6 +12,7 @@ export interface User extends RowDataPacket {
 }
 export interface Driver extends User {
   car: Car;
+  candidates: string[];
   passengers: string[];
 }
 export interface Passenger extends User {
