@@ -10,8 +10,7 @@ import {
   updateUserRating,
 } from "./database.js";
 import sampleSize from "lodash.samplesize";
-import removeWhere from "lodash.remove";
-import findWhere from "lodash.find";
+import remove from "lodash.remove";
 import { loggerMain, loggerTraffic } from "./logger.js";
 import { isNSFW } from "./ml.js";
 import { createRemoteJWKSet, jwtVerify } from "jose";
@@ -318,7 +317,7 @@ wss.on(
           driverArray[user.id].passengers.forEach((passenger) => {
             if (!socketArray[passenger]) return;
             socketArray[passenger].send(
-              msgToJSON(typeOfMessage.getDriver, driverArray[user.id])
+              msgToJSON(typeOfMessage.updateDriver, driverArray[user.id])
             );
           });
           loggerMain.info(
@@ -478,7 +477,10 @@ wss.on(
               typeof data.ratings[i] != "number" ||
               data.ratings[i] < 0 ||
               data.ratings[i] > 5 ||
-              removeWhere(pendingRatings[user.id], (e) => e).length == 0
+              remove(
+                pendingRatings[user.id],
+                (userIDs) => userIDs == data.ids[i]
+              ).length == 0
             ) {
               notifyBadRequest(
                 ws,
@@ -690,7 +692,11 @@ wss.on(
           break;
         }
         case typeOfMessage.getPassengers: {
-          if (findWhere(passengerArray, (passenger) => !passenger.driver_id)) {
+          if (
+            Object.keys(passengerArray).find(
+              (id) => !passengerArray[id].driver_id
+            )
+          ) {
             ws.send(msgToJSON(typeOfMessage.getPassengers, null));
           }
           break;
