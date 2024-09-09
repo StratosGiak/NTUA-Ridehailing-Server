@@ -143,20 +143,7 @@ async function isNSFW(path: string) {
 async function deletePicture(pictureURL: string) {
   try {
     const response = await fetch(
-function deletePicture(pictureURL: string) {
-  fetch(`http://${env.MEDIA_HOST}:${env.MEDIA_PORT}/images/${pictureURL}`, {
-    method: "DELETE",
-  })
-    .then((response) => {
-      if (!response.ok) {
-        loggerMain.warn(`FAILED to delete image at /images/${pictureURL}`);
-      } else {
-        loggerMain.info(`Deleted image at /images/${pictureURL}`);
-      }
-    })
-    .catch((error) => {
-      loggerMain.error(`Failed to connect to media server: ${error}`);
-    });
+      `https://${env.MEDIA_HOST}:${env.MEDIA_PORT}/post/images/${pictureURL}`,
       {
         method: "DELETE",
       }
@@ -173,9 +160,7 @@ function deletePicture(pictureURL: string) {
 
 async function authenticate(req: IncomingMessage) {
   let idToken = req.headers["sec-websocket-protocol"];
-  loggerTraffic.info(
-    `Connection attempted` // + `with token: ${JSON.stringify(idToken, null, 2)}`
-  );
+  loggerTraffic.info(`Connection attempted`);
   if (!idToken) return;
   let decodedToken;
   try {
@@ -195,7 +180,7 @@ async function authenticate(req: IncomingMessage) {
     id: (decodedToken.email as string).split("@")[0],
     full_name: decodedToken.name as string,
     given_name: decodedToken.given_name as string,
-  };
+  } as Credentials;
 }
 
 const server = createServer();
@@ -262,6 +247,7 @@ wss.on(
     });
 
     ws.on("close", () => {
+      if (!user) return;
       stopDriver(user.id);
       stopPassenger(user.id);
       delete socketArray[user.id];
@@ -295,13 +281,13 @@ wss.on(
             notifyBadRequest(ws, user.id, decoded, typeOfMessage.newDriver);
             break;
           }
+          stopPassenger(user.id);
           driverArray[user.id] = {
             ...user,
             coords: data.coords,
             car: data.car,
             passengers: [],
           };
-          stopPassenger(user.id);
           ws.send(msgToJSON(typeOfMessage.newDriver, null));
           loggerMain.info(
             `New driver: ${JSON.stringify(
@@ -326,9 +312,7 @@ wss.on(
           passengerArray[user.id] = {
             ...user,
             coords: data.coords,
-            cars: {},
           };
-          delete driverMap[user.id];
           loggerMain.info(
             `New passenger: ${JSON.stringify(
               {
@@ -685,10 +669,9 @@ wss.on(
             notifyBadRequest(ws, user.id, decoded, typeOfMessage.removeCar);
             break;
           }
-          if (!user.cars[data]) break;
           if (user.cars[data].picture)
             deletePicture("cars/" + user.cars[data].picture);
-          removeUserCar(user.id, data);
+          removeUserCar(user.id, parseInt(data));
           loggerMain.info(
             `Removed car from ${user.id}: ${JSON.stringify(
               user.cars[data],

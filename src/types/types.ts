@@ -8,7 +8,7 @@ export interface User extends RowDataPacket {
   ratings_sum: number;
   ratings_count: number;
   cars: { [id: string]: Car };
-  coords: [number, number];
+  coords: { latitude: number; longitude: number };
 }
 export interface Driver extends User {
   car: Car;
