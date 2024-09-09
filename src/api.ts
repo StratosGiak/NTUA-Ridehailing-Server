@@ -75,6 +75,25 @@ function notifyBadRequest(
   ws.send(msgToJSON(typeOfMessage.badRequest, type));
 }
 
+function isValidCar(car: any) {
+  return (
+    car != null &&
+    typeof car.model == "string" &&
+    typeof car.license == "string" &&
+    typeof car.seats == "number" &&
+    (typeof car.color == "number" || car.color == null) &&
+    (typeof car.picture == "string" || car.picture == null)
+  );
+}
+
+function isValidCoordinates(coords: any) {
+  return (
+    coords != null &&
+    typeof coords.latitude == "number" &&
+    typeof coords.longitude == "number"
+  );
+}
+
 function stopDriver(id: string, deleteDriver: boolean = true) {
   if (!driverArray[id]) return;
   driverArray[id].passengers.forEach((passenger) => {
@@ -246,14 +265,12 @@ wss.on(
       );
       switch (type) {
         case typeOfMessage.newDriver: {
-          if (!data.coords || !data.car) {
-            notifyBadRequest(
-              ws,
-
-              user.id,
-              decoded,
-              typeOfMessage.newDriver
-            );
+          if (
+            !data ||
+            !isValidCar(data.car) ||
+            !isValidCoordinates(data.coords)
+          ) {
+            notifyBadRequest(ws, user.id, decoded, typeOfMessage.newDriver);
             break;
           }
           driverArray[user.id] = {
@@ -279,14 +296,8 @@ wss.on(
           break;
         }
         case typeOfMessage.newPassenger: {
-          if (!data.coords) {
-            notifyBadRequest(
-              ws,
-
-              user.id,
-              decoded,
-              typeOfMessage.newPassenger
-            );
+          if (!data || !isValidCoordinates(data.coords)) {
+            notifyBadRequest(ws, user.id, decoded, typeOfMessage.newPassenger);
             break;
           }
           stopDriver(user.id);
@@ -311,7 +322,10 @@ wss.on(
         }
         case typeOfMessage.updateDriver: {
           if (!driverArray[user.id]) break;
-
+          if (!data || !isValidCoordinates(data.coords)) {
+            notifyBadRequest(ws, user.id, decoded, typeOfMessage.updateDriver);
+            break;
+          }
           driverArray[user.id].picture = user.picture;
           driverArray[user.id].coords = data.coords;
           driverArray[user.id].passengers.forEach((passenger) => {
@@ -335,10 +349,9 @@ wss.on(
         }
         case typeOfMessage.updatePassenger: {
           if (!passengerArray[user.id]) break;
-          if (!data.coords) {
+          if (!data || !isValidCoordinates(data.coords)) {
             notifyBadRequest(
               ws,
-
               user.id,
               decoded,
               typeOfMessage.updatePassenger
@@ -456,19 +469,14 @@ wss.on(
         }
         case typeOfMessage.sendRatings: {
           if (
+            !data ||
             !data.ids ||
             !data.ratings ||
             !Array.isArray(data.ids) ||
             !Array.isArray(data.ratings) ||
             data.ids.length != data.ratings.length
           ) {
-            notifyBadRequest(
-              ws,
-
-              user.id,
-              decoded,
-              typeOfMessage.sendRatings
-            );
+            notifyBadRequest(ws, user.id, decoded, typeOfMessage.sendRatings);
             break;
           }
           for (let i = 0; i < data.ids.length; i++) {
@@ -482,13 +490,7 @@ wss.on(
                 (userIDs) => userIDs == data.ids[i]
               ).length == 0
             ) {
-              notifyBadRequest(
-                ws,
-
-                user.id,
-                decoded,
-                typeOfMessage.sendRatings
-              );
+              notifyBadRequest(ws, user.id, decoded, typeOfMessage.sendRatings);
               continue;
             }
             if (data.ratings[i] == 0) continue;
@@ -511,13 +513,16 @@ wss.on(
           break;
         }
         case typeOfMessage.addCar: {
-          if (!data.model || !data.license || !data.seats) {
+          if (!data || !isValidCar(data)) {
             notifyBadRequest(ws, user.id, decoded, typeOfMessage.addCar);
             break;
           }
           const car = await createCar(user.id, data);
           if (!car) {
-            return;
+            loggerMain.warn(
+              `Failed to create car ${JSON.stringify(data, null, 2)}`
+            );
+            break;
           }
           user.cars[car.id] = car;
           ws.send(msgToJSON(typeOfMessage.addCar, car));
@@ -556,19 +561,13 @@ wss.on(
         }
         case typeOfMessage.updateCar: {
           if (
+            !data ||
             !data.id ||
-            !data.model ||
-            !data.license ||
-            !data.seats ||
-            !user.cars[data.id]
+            typeof data.id != "string" ||
+            !user.cars[data.id] ||
+            !isValidCar(data)
           ) {
-            notifyBadRequest(
-              ws,
-
-              user.id,
-              decoded,
-              typeOfMessage.updateCar
-            );
+            notifyBadRequest(ws, user.id, decoded, typeOfMessage.updateCar);
             break;
           }
           const oldPicture = user.cars[data.id].picture;
@@ -577,7 +576,7 @@ wss.on(
             loggerMain.warn(
               `Failed to update car ${JSON.stringify(newCar, null, 2)}`
             );
-            return;
+            break;
           }
           if (oldPicture && newCar.picture != oldPicture) {
             deletePicture("cars/" + oldPicture);
@@ -608,7 +607,7 @@ wss.on(
           break;
         }
         case typeOfMessage.updateUserPicture: {
-          if (!data) {
+          if (!data || typeof data != "string") {
             notifyBadRequest(
               ws,
 
@@ -661,19 +660,13 @@ wss.on(
           break;
         }
         case typeOfMessage.deleteCarPicture: {
-          if (!data || !user.cars[data]) break;
+          if (!data || typeof data != "string" || !user.cars[data]) break;
           deletePicture("cars/" + data);
           break;
         }
         case typeOfMessage.removeCar: {
-          if (!data) {
-            notifyBadRequest(
-              ws,
-
-              user.id,
-              decoded,
-              typeOfMessage.removeCar
-            );
+          if (!data || typeof data != "string" || !user.cars[data]) {
+            notifyBadRequest(ws, user.id, decoded, typeOfMessage.removeCar);
             break;
           }
           if (!user.cars[data]) break;
