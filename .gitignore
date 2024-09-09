@@ -1,6 +1,6 @@
 .env*
 *.log*
-public
+public/*
 !public/index.html
 node_modules
 built
