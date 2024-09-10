@@ -431,6 +431,10 @@ wss.on(
             break;
           const driver_id = passengerArray[user.id].driver_id!;
           if (!data) {
+            remove(
+              driverArray[driver_id].candidates,
+              (passenger) => passenger == user.id
+            );
             delete passengerArray[user.id].driver_id;
             loggerMain.info(`Passenger ${user.id} refused driver ${driver_id}`);
             break;
