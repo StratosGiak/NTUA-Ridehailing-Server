@@ -22,7 +22,7 @@ const pool = mysql
 /**
  * @deprecated Do not use unless necessary. Will request ALL users into memory
  */
-export async function getAllUsers(): Promise<{ [id: string]: User }> {
+export async function getAllUsers() {
   const [users] = await pool.execute<User[]>("SELECT * FROM users");
   const [cars] = await pool.execute<Car[]>("SELECT * FROM cars");
   const result = users.map((user, _) => {
@@ -41,7 +41,7 @@ export async function getAllUsers(): Promise<{ [id: string]: User }> {
   }, {});
 }
 
-export async function getUser(user_id: string): Promise<User | undefined> {
+export async function getUser(user_id: string) {
   const [user] = await pool.execute<User[]>(
     `SELECT * FROM users WHERE id = ?`,
     [user_id]
@@ -59,25 +59,20 @@ export async function getUser(user_id: string): Promise<User | undefined> {
   return user[0];
 }
 
-export async function getCar(id: number): Promise<Car | undefined> {
+export async function getCar(id: number) {
   const [car] = await pool.execute<Car[]>(`SELECT * FROM cars WHERE id = ?`, [
     id,
   ]);
+  if (!car[0]) return;
   return car[0];
 }
 
-export async function createUser(user_id: string): Promise<User | undefined> {
-  const [result, fields] = await pool.execute(
-    `INSERT INTO users (id) VALUES (?)`,
-    [user_id]
-  );
+export async function createUser(user_id: string) {
+  await pool.execute(`INSERT INTO users (id) VALUES (?)`, [user_id]);
   return getUser(user_id);
 }
 
-export async function createCar(
-  user_id: string,
-  car: Car
-): Promise<Car | undefined> {
+export async function createCar(user_id: string, car: Car) {
   const [result, fields] = await pool.execute<ResultSetHeader>(
     `INSERT INTO cars (user_id, model, seats, license, picture, color) VALUES (?, ?, ?, ?, ?, ?)`,
     [user_id, car.model, car.seats, car.license, car.picture, car.color]
@@ -100,8 +95,8 @@ export async function updateUserRating(
   user_id: string,
   ratings_sum: number,
   ratings_count: number
-): Promise<void> {
-  const [result] = await pool.execute(
+) {
+  await pool.execute(
     `UPDATE users SET ratings_sum = ?, ratings_count = ? WHERE (id = ?)`,
     [ratings_sum, ratings_count, user_id]
   );
@@ -114,28 +109,22 @@ export async function addUserRating(user_id: string, rating: number) {
   );
 }
 
-export async function updateUserCar(
-  user_id: string,
-  car: Car
-): Promise<Car | undefined> {
-  const [result] = await pool.execute(
+export async function updateUserCar(user_id: string, car: Car) {
+  await pool.execute(
     `UPDATE cars SET model = ?, seats = ?, license = ?, picture = ?, color = ? WHERE (user_id = ?) & (id = ?)`,
     [car.model, car.seats, car.license, car.picture, car.color, user_id, car.id]
   );
   return getCar(car.id);
 }
 
-export async function removeUserCar(
-  user_id: string,
-  car_id: number
-): Promise<void> {
-  const [result, fields] = await pool.execute(
-    `DELETE FROM cars WHERE (user_id = ?) & (id = ?)`,
-    [user_id, car_id]
-  );
+export async function removeUserCar(user_id: string, car_id: number) {
+  await pool.execute(`DELETE FROM cars WHERE (user_id = ?) & (id = ?)`, [
+    user_id,
+    car_id,
+  ]);
 }
 
-export async function removeUser(user_id: string): Promise<void> {
+export async function removeUser(user_id: string) {
   await pool.execute(`DELETE FROM users WHERE id = ?`, [user_id]);
   await pool.execute(`DELETE FROM cars WHERE user_id = ?`, [user_id]);
 }
