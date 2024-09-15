@@ -1,5 +1,7 @@
 src/config/*
+!.env.example
 !init_database.sql
+!example.conf
 !requirements.txt
 *.log*
 public/*
