@@ -25,7 +25,7 @@ npx tsc
 
 echo "Starting server in $mode mode..."
 
-parallel --lb ::: "python3 ./src/ml.py" "node built/api.js" "node built/media.js" "node built/website.js" & pid=$!
+parallel --lb ::: "python3 ./src/ml.py" "npx tsx ./src/api.ts" "npx tsx ./src/media.ts" "npx tsx ./src/website.ts" & pid=$!
 
 wait $pid
 
