@@ -81,19 +81,27 @@ app.get("/auth", (req, res) => {
 
 app.get("/auth/cb", async (req, res) => {
   const params = client.callbackParams(req);
-  const tokenSet = await client.callback(env.WEB_CLIENT_REDIRECT_URI, params, {
-    code_verifier: req.session.codeVerifier,
-  });
-  if (!tokenSet.claims().email || !tokenSet.claims().name) {
-    res.status(401).redirect("/");
-    return;
+  try {
+    const tokenSet = await client.callback(
+      env.WEB_CLIENT_REDIRECT_URI,
+      params,
+      {
+        code_verifier: req.session.codeVerifier,
+      }
+    );
+    if (!tokenSet.claims().email || !tokenSet.claims().name) {
+      res.status(401).redirect("/");
+      return;
+    }
+    req.session.idToken = tokenSet.id_token;
+    req.session.user = {
+      id: tokenSet.claims().email!.split("@")[0],
+      name: tokenSet.claims().name!,
+    };
+    res.redirect("/profile");
+  } catch (error) {
+    res.redirect("/");
   }
-  req.session.idToken = tokenSet.id_token;
-  req.session.user = {
-    id: tokenSet.claims().email!.split("@")[0],
-    name: tokenSet.claims().name!,
-  };
-  res.redirect("/profile");
 });
 
 app.get("/profile", async (req, res) => {
