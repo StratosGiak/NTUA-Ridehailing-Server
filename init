@@ -1,0 +1,24 @@
+#!/bin/bash
+cd $( dirname $0 )
+
+if [ $# -ne 1 ]; then
+  echo "Usage $0 [-development | -production]"
+  exit 1
+fi
+
+if [ "$1" == "-production" ]; then
+  mode="production"
+else
+  mode="development"
+fi
+
+python3 -m venv .venv
+source ./.venv/bin/activate
+pip install -r ./src/config/requirements.txt
+
+set -a
+source ./src/config/.env
+source ./src/config/.env.$mode
+set +a
+
+mysql -A -u $DB_USER -p -e "CREATE DATABASE IF NOT EXISTS $DB_DBNAME; USE $DB_DBNAME; source ./src/config/init_database.sql;"

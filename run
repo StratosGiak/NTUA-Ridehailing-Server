@@ -21,8 +21,6 @@ source ./src/config/.env.$mode
 set +a
 source ./.venv/bin/activate
 
-# mysql -A -u $DB_USER -p -e "CREATE DATABASE IF NOT EXISTS $DB_DBNAME; USE $DB_DBNAME; source ./src/config/init_database.sql;"
-
 npx tsc
 
 echo "Starting server in $mode mode..."

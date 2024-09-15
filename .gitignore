@@ -1,4 +1,6 @@
-.env*
+src/config/*
+!init_database.sql
+!requirements.txt
 *.log*
 public/*
 !public/index.html
