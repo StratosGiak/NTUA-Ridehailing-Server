@@ -7,7 +7,7 @@ import {
   removeUserCar,
   updateUserCar,
   updateUserPicture,
-  updateUserRating,
+  addUserRating,
 } from "./database.js";
 import sampleSize from "lodash.samplesize";
 import remove from "lodash.remove";
@@ -408,6 +408,11 @@ wss.on(
               msgToJSON(typeOfMessage.pingPassengers, user.id)
             );
           }
+          loggerMain.info(
+            `Driver ${user.id} pinged passengers ${
+              driverArray[user.id].candidates
+            }`
+          );
           break;
         }
         case typeOfMessage.pingDriver: {
@@ -498,46 +503,25 @@ wss.on(
           break;
         }
         case typeOfMessage.sendRatings: {
-          if (
-            !data ||
-            !data.ids ||
-            !data.ratings ||
-            !Array.isArray(data.ids) ||
-            !Array.isArray(data.ratings) ||
-            data.ids.length != data.ratings.length
-          ) {
+          if (!Array.isArray(data)) {
             notifyBadRequest(ws, user.id, decoded, typeOfMessage.sendRatings);
             break;
           }
-          for (let i = 0; i < data.ids.length; i++) {
+          for (const { id, rating } of data) {
             if (
-              typeof data.ids[i] != "string" ||
-              typeof data.ratings[i] != "number" ||
-              data.ratings[i] < 0 ||
-              data.ratings[i] > 5 ||
-              remove(
-                pendingRatings[user.id],
-                (userIDs) => userIDs == data.ids[i]
-              ).length == 0
+              typeof id != "string" ||
+              typeof rating != "number" ||
+              rating < 0 ||
+              rating > 5 ||
+              remove(pendingRatings[user.id], (e) => e == id).length == 0
             ) {
               notifyBadRequest(ws, user.id, decoded, typeOfMessage.sendRatings);
               continue;
             }
-            if (data.ratings[i] == 0) continue;
-            const targetUser = await getUser(data.ids[i]);
-            if (!targetUser) {
-              loggerMain.warn(
-                `User ${user.id} tried to rate user ${data.ids[i]} but failed`
-              );
-              continue;
-            }
-            updateUserRating(
-              targetUser.id,
-              targetUser.ratings_sum + data.ratings[i],
-              targetUser.ratings_count + 1
-            );
+            if (rating == 0) continue;
+            addUserRating(id, rating);
             loggerMain.info(
-              `User ${user.id} rated user ${data.ids[i]} with ${data.ratings[i]} stars`
+              `User ${user.id} rated user ${id} with ${rating} stars`
             );
           }
           break;

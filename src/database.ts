@@ -107,6 +107,13 @@ export async function updateUserRating(
   );
 }
 
+export async function addUserRating(user_id: string, rating: number) {
+  await pool.execute(
+    `UPDATE users SET ratings_sum = ratings_sum + ?, ratings_count = ratings_count + 1 WHERE (id = ?)`,
+    [rating, user_id]
+  );
+}
+
 export async function updateUserCar(
   user_id: string,
   car: Car
