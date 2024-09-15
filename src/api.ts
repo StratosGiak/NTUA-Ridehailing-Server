@@ -97,14 +97,14 @@ function isValidCoordinates(coords: any) {
 
 function stopDriver(id: string, deleteDriver: boolean = true) {
   if (!driverArray[id]) return;
-  driverArray[id].passengers.forEach((passenger) => {
+  for (const passenger of driverArray[id].passengers) {
     if (passengerArray[passenger]) {
       delete passengerArray[passenger].driver_id;
     }
     if (socketArray[passenger]) {
       socketArray[passenger].send(msgToJSON(typeOfMessage.updateDriver, null));
     }
-  });
+  }
   if (deleteDriver) delete driverArray[id];
 }
 
@@ -335,12 +335,12 @@ wss.on(
           }
           driverArray[user.id].picture = user.picture;
           driverArray[user.id].coords = data.coords;
-          driverArray[user.id].passengers.forEach((passenger) => {
+          for (const passenger of driverArray[user.id].passengers) {
             if (!socketArray[passenger]) return;
             socketArray[passenger].send(
               msgToJSON(typeOfMessage.updateDriver, driverArray[user.id])
             );
-          });
+          }
           loggerMain.info(
             `Driver update: ${JSON.stringify(
               {
@@ -401,13 +401,13 @@ wss.on(
             passengerIDArray,
             Math.min(driverArray[user.id].car.seats + 2, 5)
           );
-          driverArray[user.id].candidates.forEach((id) => {
+          for (const id of driverArray[user.id].candidates) {
             passengerArray[id].driver_id = user.id;
             if (!socketArray[id]) return;
             socketArray[id].send(
               msgToJSON(typeOfMessage.pingPassengers, user.id)
             );
-          });
+          }
           break;
         }
         case typeOfMessage.pingDriver: {
@@ -482,13 +482,13 @@ wss.on(
         }
         case typeOfMessage.arrivedDestination: {
           if (!driverArray[user.id]) break;
-          driverArray[user.id].passengers.forEach((passenger) => {
+          for (const passenger of driverArray[user.id].passengers) {
             if (!socketArray[passenger]) return;
             socketArray[passenger].send(
               msgToJSON(typeOfMessage.arrivedDestination, null)
             );
             pendingRatings[passenger] = [user.id];
-          });
+          }
           pendingRatings[user.id] = driverArray[user.id].passengers;
           loggerMain.info(
             `Driver ${user.id} arrived at destination with passengers ${
