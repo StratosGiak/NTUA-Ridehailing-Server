@@ -25,8 +25,8 @@ const env = cleanEnv(process.env, {
   ISSUER: str(),
   WEB_CLIENT_ID: str(),
   WEB_CLIENT_SECRET: str(),
-  WEB_CLIENT_REDIRECT_URI: str(),
-  WEB_CLIENT_LOGOUT_REDIRECT_URI: str(),
+  WEB_REDIRECT_URI: str(),
+  WEB_LOGOUT_REDIRECT_URI: str(),
   SESSION_SECRET: str(),
   CRON_PING_URL: str(),
   CRON_INTERVAL_MS: num(),
@@ -62,7 +62,7 @@ const myIssuer = await Issuer.discover(env.ISSUER);
 const client = new myIssuer.Client({
   client_id: env.WEB_CLIENT_ID,
   client_secret: env.WEB_CLIENT_SECRET,
-  redirect_uris: [env.WEB_CLIENT_REDIRECT_URI],
+  redirect_uris: [env.WEB_REDIRECT_URI],
   response_types: ["code"],
 });
 
@@ -82,13 +82,9 @@ app.get("/auth", (req, res) => {
 app.get("/auth/cb", async (req, res) => {
   const params = client.callbackParams(req);
   try {
-    const tokenSet = await client.callback(
-      env.WEB_CLIENT_REDIRECT_URI,
-      params,
-      {
-        code_verifier: req.session.codeVerifier,
-      }
-    );
+    const tokenSet = await client.callback(env.WEB_REDIRECT_URI, params, {
+      code_verifier: req.session.codeVerifier,
+    });
     if (!tokenSet.claims().email || !tokenSet.claims().name) {
       res.status(401).redirect("/");
       return;
@@ -133,7 +129,7 @@ app.get("/profile", async (req, res) => {
 
 app.post("/profile/logout", (req, res) => {
   const logoutUrl = client.endSessionUrl({
-    post_logout_redirect_uri: env.WEB_CLIENT_LOGOUT_REDIRECT_URI,
+    post_logout_redirect_uri: env.WEB_LOGOUT_REDIRECT_URI,
     id_token_hint: req.session.idToken,
   });
   res.redirect(logoutUrl);
