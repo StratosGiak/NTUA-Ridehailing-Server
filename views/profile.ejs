@@ -116,11 +116,10 @@
     </div>
     <div class="actions">
       <form action="logout" method="post">
-        <button>Sign out</button>
+        <button class="signout">Sign out</button>
       </form>
       <form action="delete" method="post">
-        <input type="hidden" name="csrf" value="<%= csrfToken %>">
-        <button>Delete account</button>
+        <button class="delete"><span class="icon-text"><i class="fa fa-trash" style="font-size: 16px;"></i>Delete account</span></button>
       </form>
     </div>
   </div>

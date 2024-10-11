@@ -8,12 +8,10 @@ import { getUser, removeUser } from "./database.js";
 import { loggerMain } from "./logger.js";
 import { cleanEnv, num, str } from "envalid";
 import { generators, Issuer } from "openid-client";
-import Tokens from "csrf";
 
 declare module "express-session" {
   export interface SessionData {
     codeVerifier: string;
-    csrfSecret: string;
     idToken: string;
     user: { id: string; name: string };
   }
@@ -37,8 +35,6 @@ let redisClient = createClient();
 redisClient.connect().catch(loggerMain.error);
 let redisStore = new RedisStore({ client: redisClient, prefix: "ridehailing" });
 
-const CSRF = new Tokens();
-
 const app = express();
 
 app.set("trust proxy", "127.0.0.1");
@@ -47,8 +43,8 @@ app.use(
     store: redisStore,
     secret: env.SESSION_SECRET,
     resave: false,
-    saveUninitialized: true,
-    cookie: { secure: true, httpOnly: true, sameSite: "strict" },
+    saveUninitialized: false,
+    cookie: { secure: true, httpOnly: true, sameSite: "lax" },
   })
 );
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -112,10 +108,6 @@ app.get("/profile", async (req, res) => {
   }
   user.full_name = req.session.user.name;
 
-  const csrfSecret = await CSRF.secret();
-  const csrfToken = CSRF.create(csrfSecret);
-  req.session.csrfSecret = csrfSecret;
-
   res.render("profile", {
     id: user.id,
     name: user.full_name,
@@ -123,7 +115,6 @@ app.get("/profile", async (req, res) => {
     ratings_count: user.ratings_count,
     ratings_sum: user.ratings_sum,
     picture: user.picture,
-    csrfToken: csrfToken,
   });
 });
 
@@ -139,13 +130,6 @@ app.post("/profile/logout", (req, res) => {
 });
 
 app.post("/profile/delete", async (req, res) => {
-  if (
-    !req.session.csrfSecret ||
-    !CSRF.verify(req.session.csrfSecret, req.body.csrf)
-  ) {
-    res.status(403).send();
-    return;
-  }
   if (!req.session.user) {
     res.status(401).send();
     return;
