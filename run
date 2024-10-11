@@ -21,14 +21,13 @@ source ./src/config/.env.$mode
 set +a
 source ./.venv/bin/activate
 
-npx tsc
-
 echo "Starting server in $mode mode..."
 
-parallel --lb ::: "python3 ./src/ml.py" "npx tsx ./src/api.ts" "npx tsx ./src/media.ts" "npx tsx ./src/website.ts" & pid=$!
-
-wait $pid
+if [ $mode == "production" ]; then
+  (trap 'kill 0' SIGINT; python3 ./src/ml.py & npx tsx ./src/api.ts & npx tsx ./src/media.ts & npx tsx ./src/website.ts)
+else
+  (trap 'kill 0' SIGINT; python3 ./src/ml.py & npx tsx watch ./src/api.ts & npx tsx watch ./src/media.ts & npx tsx watch ./src/website.ts)
+fi
 
 echo
 echo "Server stopped"
-

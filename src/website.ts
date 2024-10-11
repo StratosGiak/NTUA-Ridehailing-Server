@@ -4,7 +4,7 @@ import bodyParser from "body-parser";
 import ejs from "ejs";
 import RedisStore from "connect-redis";
 import { createClient } from "redis";
-import { getUser, removeUser } from "./database.js";
+import { getUser, removeUser } from "./database.ts";
 import { loggerWebsite } from "./logger.ts";
 import { cleanEnv, num, str } from "envalid";
 import { generators, Issuer } from "openid-client";

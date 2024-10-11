@@ -2,7 +2,7 @@ import express from "express";
 import multer from "multer";
 import fs from "fs/promises";
 import { createRemoteJWKSet, jwtVerify } from "jose";
-import { loggerMedia } from "./logger.js";
+import { loggerMedia } from "./logger.ts";
 import { cleanEnv, num, str } from "envalid";
 
 const env = cleanEnv(process.env, {

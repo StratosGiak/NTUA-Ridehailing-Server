@@ -1,5 +1,5 @@
 import mysql, { ResultSetHeader } from "mysql2";
-import { Car, User } from "./types/types.js";
+import { Car, User } from "./types/types.ts";
 import { cleanEnv, str } from "envalid";
 
 const env = cleanEnv(process.env, {

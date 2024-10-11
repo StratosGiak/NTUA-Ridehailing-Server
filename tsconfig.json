@@ -6,7 +6,9 @@
     "moduleResolution": "NodeNext",
     "module": "NodeNext",
     "strict": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true
   },
   "include": ["./src/**/*"]
 }

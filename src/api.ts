@@ -8,13 +8,13 @@ import {
   updateUserCar,
   updateUserPicture,
   addUserRating,
-} from "./database.js";
+} from "./database.ts";
 import sampleSize from "lodash.samplesize";
 import remove from "lodash.remove";
-import { loggerMain, loggerTraffic } from "./logger.js";
+import { loggerAPI, loggerTraffic } from "./logger.ts";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { cleanEnv, str, num } from "envalid";
-import type { Car, Credentials, Driver, Passenger } from "./types/types.js";
+import type { Car, Credentials, Driver, Passenger } from "./types/types.ts";
 
 const env = cleanEnv(process.env, {
   API_PORT: str(),
