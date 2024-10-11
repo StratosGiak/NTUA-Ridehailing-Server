@@ -82,15 +82,23 @@ app.get("/auth/cb", async (req, res) => {
       code_verifier: req.session.codeVerifier,
     });
     if (!tokenSet.claims().email || !tokenSet.claims().name) {
-      res.status(401).redirect("/");
+      res.status(401).send();
       return;
     }
-    req.session.idToken = tokenSet.id_token;
-    req.session.user = {
-      id: tokenSet.claims().email!.split("@")[0],
-      name: tokenSet.claims().name!,
-    };
-    res.redirect("/profile");
+    req.session.regenerate((err) => {
+      if (err) loggerWebsite.warn(err);
+
+      req.session.idToken = tokenSet.id_token;
+      req.session.user = {
+        id: tokenSet.claims().email!.split("@")[0],
+        name: tokenSet.claims().name!,
+      };
+
+      req.session.save((err) => {
+        if (err) loggerWebsite.warn(err);
+        res.redirect("/profile");
+      });
+    });
   } catch (error) {
     res.redirect("/");
   }
@@ -103,7 +111,7 @@ app.get("/profile", async (req, res) => {
   }
   let user = await getUser(req.session.user.id);
   if (!user) {
-    res.status(500).redirect("/");
+    res.status(500).send();
     return;
   }
   user.full_name = req.session.user.name;
@@ -135,7 +143,15 @@ app.post("/profile/delete", async (req, res) => {
     return;
   }
   //await removeUser(req.session.user.id);
-  res.redirect("/profile/logout");
+  loggerWebsite.info(`Deleted user ${req.session.user.id}`);
+  const logoutUrl = client.endSessionUrl({
+    post_logout_redirect_uri: env.WEB_LOGOUT_REDIRECT_URI,
+    id_token_hint: req.session.idToken,
+  });
+  req.session.destroy((err) => {
+    if (err) loggerWebsite.error(err);
+    res.redirect(logoutUrl);
+  });
 });
 
 app.listen(env.WEB_PORT, () => {
