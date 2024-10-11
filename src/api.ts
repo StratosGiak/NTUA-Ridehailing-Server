@@ -18,10 +18,6 @@ import type { Car, Credentials, Driver, Passenger } from "./types/types.ts";
 
 const env = cleanEnv(process.env, {
   API_PORT: str(),
-  MEDIA_HOST: str(),
-  MEDIA_PORT: num(),
-  ML_HOST: str(),
-  ML_PORT: num(),
   JWKS: str(),
   CRON_PING_URL: str(),
   CRON_INTERVAL_MS: num(),
@@ -522,7 +518,11 @@ wss.on(
           break;
         }
         case typeOfMessage.addCar: {
-          if (!data || !isValidCar(data)) {
+          if (
+            Object.keys(user.cars).length >= 3 ||
+            !data ||
+            !isValidCar(data)
+          ) {
             notifyBadRequest(ws, user.id, decoded, typeOfMessage.addCar);
             break;
           }
