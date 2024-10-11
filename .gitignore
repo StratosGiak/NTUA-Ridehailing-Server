@@ -6,6 +6,7 @@ src/config/*
 *.log*
 public/*
 !public/index.html
+!public/style.css
 node_modules
 built
 .venv
