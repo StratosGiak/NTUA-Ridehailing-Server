@@ -70,7 +70,7 @@ function notifyBadRequest(
   decoded: any,
   type: string
 ) {
-  loggerMain.warn(
+  loggerTraffic.warn(
     `Bad request from ${id}: ${JSON.stringify(decoded, null, 2)}`
   );
   ws.send(msgToJSON(typeOfMessage.badRequest, type));
@@ -142,19 +142,14 @@ async function isNSFW(path: string) {
 
 async function deletePicture(pictureURL: string) {
   try {
-    const response = await fetch(
-      `https://${env.MEDIA_HOST}:${env.MEDIA_PORT}/post/images/${pictureURL}`,
+    await fetch(
+      `https://ntua-ridehailing.dslab.ece.ntua.gr/media/post/images/${pictureURL}`,
       {
         method: "DELETE",
       }
     );
-    if (!response.ok) {
-      loggerMain.warn(`FAILED to delete image at ${pictureURL}`);
-    } else {
-      loggerMain.info(`Deleted image at ${pictureURL}`);
-    }
   } catch (error) {
-    loggerMain.error(`Failed to connect to media server: ${error}`);
+    loggerAPI.error(`Failed to connect to media server: ${error}`);
   }
 }
 
@@ -166,11 +161,11 @@ async function authenticate(req: IncomingMessage) {
   try {
     decodedToken = (await jwtVerify(idToken, JWKS)).payload;
   } catch (error) {
-    loggerMain.warn(error);
+    loggerAPI.warn(error);
     return;
   }
   if (!decodedToken || !decodedToken.name || !decodedToken.email) {
-    loggerMain.warn(
+    loggerAPI.warn(
       `Client tried to connect with invalid info: ` +
         JSON.stringify(decodedToken, null, 2)
     );
@@ -191,13 +186,13 @@ const wss = new WebSocketServer({
 
 server.on("upgrade", async (req, socket, head) => {
   socket.on("error", (err) => {
-    loggerMain.error(err);
+    loggerAPI.error(err);
   });
 
   let credentials = await authenticate(req);
   if (!credentials) {
     socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
-    loggerMain.warn(
+    loggerAPI.warn(
       `Error authenticating: ${req.headers["sec-websocket-protocol"]}`
     );
     socket.destroy();
@@ -218,7 +213,7 @@ wss.on(
       return;
     }
     if (socketArray[credentials.id]) {
-      loggerMain.warn(
+      loggerAPI.warn(
         `Client ${credentials.id} tried to connect while already connected`
       );
       ws.close(4001, "user already connected");
@@ -226,10 +221,10 @@ wss.on(
     }
     let user = await getUser(credentials.id);
     if (!user) {
-      loggerMain.info(`ID ${credentials.id} not found. Creating new user...`);
+      loggerAPI.info(`ID ${credentials.id} not found. Creating new user...`);
       user = await createUser(credentials.id);
       if (!user) {
-        loggerMain.warn(
+        loggerAPI.warn(
           `Cannot create new user ${credentials.id}. Disconnecting...`
         );
         ws.close(4002, "cannot create user");
@@ -240,10 +235,10 @@ wss.on(
     user.given_name = credentials.given_name;
     ws.send(msgToJSON(typeOfMessage.login, user));
     socketArray[user.id] = ws;
-    loggerMain.info(`Client logged in: ${JSON.stringify(user, null, 2)}`);
+    loggerAPI.info(`Client logged in: ${JSON.stringify(user, null, 2)}`);
 
     ws.on("error", (error) => {
-      loggerMain.error(error);
+      loggerAPI.error(error);
     });
 
     ws.on("close", () => {
@@ -251,7 +246,7 @@ wss.on(
       stopDriver(user.id);
       stopPassenger(user.id);
       delete socketArray[user.id];
-      loggerMain.info(`Disconnected client ${user.id}`);
+      loggerAPI.info(`Disconnected client ${user.id}`);
     });
 
     ws.on("message", async (msg: string) => {
@@ -259,7 +254,7 @@ wss.on(
       try {
         decoded = JSON.parse(msg);
       } catch (error) {
-        loggerMain.warn(`Error parsing request from ${user.id}: ${error}`);
+        loggerAPI.warn(`Error parsing request from ${user.id}: ${error}`);
         return;
       }
       const type = decoded.type;
@@ -290,7 +285,7 @@ wss.on(
             passengers: [],
           };
           ws.send(msgToJSON(typeOfMessage.newDriver, null));
-          loggerMain.info(
+          loggerAPI.info(
             `New driver: ${JSON.stringify(
               {
                 id: driverArray[user.id].id,
@@ -314,7 +309,7 @@ wss.on(
             ...user,
             coords: data.coords,
           };
-          loggerMain.info(
+          loggerAPI.info(
             `New passenger: ${JSON.stringify(
               {
                 id: user.id,
@@ -341,7 +336,7 @@ wss.on(
               msgToJSON(typeOfMessage.updateDriver, driverArray[user.id])
             );
           }
-          loggerMain.info(
+          loggerAPI.info(
             `Driver update: ${JSON.stringify(
               {
                 id: user.id,
@@ -379,7 +374,7 @@ wss.on(
               msgToJSON(typeOfMessage.updatePassenger, passengerArray[user.id])
             );
           }
-          loggerMain.info(
+          loggerAPI.info(
             `Passenger update: ${JSON.stringify(
               {
                 id: user.id,
@@ -408,7 +403,7 @@ wss.on(
               msgToJSON(typeOfMessage.pingPassengers, user.id)
             );
           }
-          loggerMain.info(
+          loggerAPI.info(
             `Driver ${user.id} pinged passengers ${
               driverArray[user.id].candidates
             }`
@@ -441,7 +436,7 @@ wss.on(
               (passenger) => passenger == user.id
             );
             delete passengerArray[user.id].driver_id;
-            loggerMain.info(`Passenger ${user.id} refused driver ${driver_id}`);
+            loggerAPI.info(`Passenger ${user.id} refused driver ${driver_id}`);
             break;
           }
           if (
@@ -467,17 +462,17 @@ wss.on(
         }
         case typeOfMessage.stopDriver: {
           stopDriver(user.id);
-          loggerMain.info(`Stopped driver ${user.id}`);
+          loggerAPI.info(`Stopped driver ${user.id}`);
           break;
         }
         case typeOfMessage.stopPassenger: {
           stopPassenger(user.id);
-          loggerMain.info(`Stopped passenger ${user.id}`);
+          loggerAPI.info(`Stopped passenger ${user.id}`);
           break;
         }
         case typeOfMessage.outOfRange: {
           stopPassenger(user.id, false);
-          loggerMain.info(
+          loggerAPI.info(
             `Passenger ${user.id} moved out of range of ${
               passengerArray[user.id].driver_id
             }`
@@ -495,7 +490,7 @@ wss.on(
             pendingRatings[passenger] = [user.id];
           }
           pendingRatings[user.id] = driverArray[user.id].passengers;
-          loggerMain.info(
+          loggerAPI.info(
             `Driver ${user.id} arrived at destination with passengers ${
               driverArray[user.id].passengers
             }`
@@ -520,7 +515,7 @@ wss.on(
             }
             if (rating == 0) continue;
             addUserRating(id, rating);
-            loggerMain.info(
+            loggerAPI.info(
               `User ${user.id} rated user ${id} with ${rating} stars`
             );
           }
@@ -533,14 +528,14 @@ wss.on(
           }
           const car = await createCar(user.id, data);
           if (!car) {
-            loggerMain.warn(
+            loggerAPI.warn(
               `Failed to create car ${JSON.stringify(data, null, 2)}`
             );
             break;
           }
           user.cars[car.id] = car;
           ws.send(msgToJSON(typeOfMessage.addCar, car));
-          loggerMain.info(
+          loggerAPI.info(
             `Added car to user ${user.id}: ${JSON.stringify(
               user.cars[car.id],
               null,
@@ -552,7 +547,7 @@ wss.on(
             let car_id = car.id;
             const resultNSFW = await isNSFW(`cars/${picture}`);
             if (!resultNSFW) return;
-            loggerMain.warn(`NSFW image detected at cars/${picture}`);
+            loggerAPI.warn(`NSFW image detected at cars/${picture}`);
             deletePicture("cars/" + picture);
             if (!user.cars[car_id] || user.cars[car_id].picture != picture)
               return;
@@ -586,7 +581,7 @@ wss.on(
           const oldPicture = user.cars[data.id].picture;
           const newCar = await updateUserCar(user.id, data as Car);
           if (!newCar) {
-            loggerMain.warn(
+            loggerAPI.warn(
               `Failed to update car ${JSON.stringify(newCar, null, 2)}`
             );
             break;
@@ -596,7 +591,7 @@ wss.on(
           }
           user.cars[newCar.id] = newCar;
           ws.send(msgToJSON(typeOfMessage.addCar, newCar));
-          loggerMain.info(
+          loggerAPI.info(
             `Updated car of ${user.id} to: ${JSON.stringify(newCar, null, 2)}`
           );
           if (newCar.picture && newCar.picture != oldPicture) {
@@ -604,7 +599,7 @@ wss.on(
             let car_id = newCar.id;
             const resultNSFW = await isNSFW(`cars/${picture}`);
             if (!resultNSFW) return;
-            loggerMain.warn(`NSFW image detected at cars/${picture}`);
+            loggerAPI.warn(`NSFW image detected at cars/${picture}`);
             deletePicture("cars/" + picture);
             if (!user.cars[car_id] || user.cars[car_id].picture != picture)
               return;
@@ -630,7 +625,7 @@ wss.on(
           }
           let newUser = await updateUserPicture(user.id, data);
           if (!newUser) {
-            loggerMain.warn(
+            loggerAPI.warn(
               `Failed to update user ${user.id} picture ${JSON.stringify(
                 data,
                 null,
@@ -640,7 +635,7 @@ wss.on(
             return;
           }
           let newPicture = newUser.picture;
-          loggerMain.info(
+          loggerAPI.info(
             `Updated picture of ${user.id} from ${user.picture} to ${newPicture}`
           );
           if (!newPicture) break;
@@ -651,7 +646,7 @@ wss.on(
           ws.send(msgToJSON(typeOfMessage.updateUserPicture, newPicture));
           const resultNSFW = await isNSFW(`users/${newPicture}`);
           if (!resultNSFW) return;
-          loggerMain.warn(`NSFW image detected at users/${newPicture}`);
+          loggerAPI.warn(`NSFW image detected at users/${newPicture}`);
           deletePicture("users/" + newPicture);
           if (user.picture != newPicture) return;
           user.picture = null;
@@ -680,7 +675,7 @@ wss.on(
           if (user.cars[data].picture)
             deletePicture("cars/" + user.cars[data].picture);
           removeUserCar(user.id, parseInt(data));
-          loggerMain.info(
+          loggerAPI.info(
             `Removed car from ${user.id}: ${JSON.stringify(
               user.cars[data],
               null,
@@ -705,7 +700,7 @@ wss.on(
           stopDriver(user.id);
           stopPassenger(user.id);
           delete socketArray[user.id];
-          loggerMain.info(`Signed out ${user.id}`);
+          loggerAPI.info(`Signed out ${user.id}`);
           ws.close(1000, "user requested signout");
           break;
         }
@@ -715,8 +710,8 @@ wss.on(
 );
 
 server.listen(env.API_PORT, () => {
-  loggerMain.info(
-    `Started main server on port ${env.API_PORT} (${
+  loggerAPI.info(
+    `Started API server on port ${env.API_PORT} (${
       env.NODE_ENV === "production" ? "production" : "development"
     })`
   );
@@ -728,7 +723,7 @@ if (env.CRON_PING_URL && env.CRON_INTERVAL_MS) {
   setInterval(
     () =>
       fetch(url).catch((error) =>
-        loggerMain.error("Failed to connect to heartbeat server." + error)
+        loggerAPI.error("Failed to connect to heartbeat server." + error)
       ),
     env.CRON_INTERVAL_MS
   );

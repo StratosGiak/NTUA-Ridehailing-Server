@@ -5,7 +5,7 @@ import ejs from "ejs";
 import RedisStore from "connect-redis";
 import { createClient } from "redis";
 import { getUser, removeUser } from "./database.js";
-import { loggerMain } from "./logger.js";
+import { loggerWebsite } from "./logger.ts";
 import { cleanEnv, num, str } from "envalid";
 import { generators, Issuer } from "openid-client";
 
@@ -32,7 +32,7 @@ const env = cleanEnv(process.env, {
 });
 
 let redisClient = createClient();
-redisClient.connect().catch(loggerMain.error);
+redisClient.connect().catch(loggerWebsite.error);
 let redisStore = new RedisStore({ client: redisClient, prefix: "ridehailing" });
 
 const app = express();
@@ -123,9 +123,9 @@ app.post("/profile/logout", (req, res) => {
     post_logout_redirect_uri: env.WEB_LOGOUT_REDIRECT_URI,
     id_token_hint: req.session.idToken,
   });
-  res.redirect(logoutUrl);
   req.session.destroy((err) => {
-    if (err) loggerMain.error(err);
+    if (err) loggerWebsite.error(err);
+    res.redirect(logoutUrl);
   });
 });
 
@@ -139,7 +139,7 @@ app.post("/profile/delete", async (req, res) => {
 });
 
 app.listen(env.WEB_PORT, () => {
-  loggerMain.info(
+  loggerWebsite.info(
     `Started website server on port ${env.WEB_PORT} (${
       process.env.NODE_ENV === "production" ? "production" : "development"
     })`
